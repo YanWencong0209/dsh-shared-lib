@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Shared development library and memory",
+    "description": "Shares CLI tools, isolated dev environments, and skills across workspaces; mounts meow-memory seven-layer cross-session memory, with mnemon memory spaces optional."
+  }
+}
