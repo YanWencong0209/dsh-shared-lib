@@ -82,3 +82,20 @@ test('existing databases migrate additively without losing cases', () => {
     again.close()
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
+
+test('saving a case can claim this session\'s incident, leaving pending honest', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'case-link-')); const s = new CaseStore(root)
+  try {
+    const tool = caseTool(s, () => '/work')
+    const exec = { agent: { id: 's1' } }
+    s.incident({ agent: { id: 's1' }, callId: 'c1', name: 'bash' }, { isError: true, error: { info: { code: 'ENOENT' } } })
+    s.incident({ agent: { id: 's1' }, callId: 'c2', name: 'read' }, { isError: true, error: { info: { code: 'EACCES' } } })
+    const [inc] = s.pending('s1')
+    const saved = await tool.execute({ action: 'save', ...sample, incidentId: inc.id }, exec)
+    assert.equal(saved.incidentId, inc.id)
+    assert.equal(s.pending('s1').length, 1, 'only the claimed incident is resolved')
+    // A foreign session cannot claim this incident.
+    const other = await tool.execute({ action: 'save', ...sample, title: 'other title', incidentId: inc.id }, { agent: { id: 's2' } })
+    assert.equal(other.incidentId, null)
+  } finally { s.close(); rmSync(root, { recursive: true, force: true }) }
+})
