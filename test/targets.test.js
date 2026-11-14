@@ -113,9 +113,15 @@ test('verify proves presence from layout and never guesses success', async () =>
     assert.equal(by['typescript@5'].state, 'present')
     assert.equal(by['ruff==0.9'].state, 'absent')
     assert.equal(by['ripgrep'].state, 'absent', 'must not claim present from an unrelated binary')
-    assert.equal(by['serve'].state, 'unverifiable')
-    assert.equal(report.absent, 2)
-    assert.equal(report.unverifiable, 1)
+    // pnpm became probeable once its real layout was observed; bun/conda/mise stay unverifiable.
+    assert.equal(by['serve'].state, 'absent')
+    rec('bun', 'serve-bun'); rec('mise', 'node@24')
+    const by2 = Object.fromEntries(verifyDeclared(root).items.map(i => [i.spec, i]))
+    assert.equal(by2['serve-bun'].state, 'unverifiable')
+    assert.equal(by2['node@24'].state, 'unverifiable')
+    // typescript present; ruff/ripgrep/serve absent (pnpm is probeable now); failed runs dropped.
+    assert.equal(report.absent, 3)
+    assert.equal(report.unverifiable, 0)
     assert.equal(report.items.some(i => i.spec === 'failed-pkg@1'), false)
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
@@ -161,6 +167,10 @@ test('uninstall plans per manager and never invents a go uninstall', async () =>
   assert.deepEqual(planUninstall({ target: 'uv-tool', spec: 'ruff==0.9', root: '/tmp/s' }).args, ['tool', 'uninstall', 'ruff==0.9'])
   assert.deepEqual(planUninstall({ target: 'pipx', spec: 'ruff', root: '/tmp/s' }).args, ['uninstall', 'ruff'])
   assert.deepEqual(planUninstall({ target: 'cargo', spec: 'ripgrep', root: '/tmp/s' }).args, ['uninstall', '--root', '/tmp/s/env/cargo', 'ripgrep'])
+  const pnpmUn = planUninstall({ target: 'pnpm', spec: 'left-pad@1.3.0', root: '/tmp/s' })
+  assert.deepEqual(pnpmUn.args, ['remove', '--global', '--global-dir', '/tmp/s/env/pnpm', '--config.store-dir=/tmp/s/env/pnpm/store', 'left-pad'])
+  // pnpm remove aborts unless its global bin dir is on PATH; executePlan prepends it.
+  assert.equal(pnpmUn.env.PNPM_HOME, '/tmp/s/bin')
   assert.equal(planUninstall({ target: 'go', spec: 'example.com/t@v1', root: '/tmp/s' }).supported, false)
   assert.throws(() => planUninstall({ target: 'npm', spec: '-g' }))
   assert.throws(() => planUninstall({ target: 'nope', spec: 'x' }))
@@ -191,5 +201,28 @@ test('export drops targets that were later uninstalled', () => {
     writeFileSync(join(runs, 'c.json'), JSON.stringify({ action: 'uninstall', target: 'npm', spec: 'left-pad@1.3', state: 'uninstalled', args: ['uninstall', '-g', 'left-pad'], startedAt: '2026-01-02T00:00:00Z' }))
     const snapshot = JSON.parse(run(['export']).stdout)
     assert.deepEqual(snapshot.targets.map(t => t.spec), ['is-number@7'])
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test('pnpm install keeps the store out of bin and is now probeable', async () => {
+  const { planInstall, verifyDeclared } = await import('../assets/targets.mjs')
+  const plan = planInstall({ target: 'pnpm', spec: 'left-pad@1.3.0', root: '/tmp/s' })
+  assert.equal(plan.env.PNPM_HOME, '/tmp/s/bin', 'global bin dir must be the shared bin')
+  assert.ok(plan.args.includes('--store-dir'), 'store must be pinned inside the shared root')
+  assert.equal(plan.args[plan.args.indexOf('--store-dir') + 1], '/tmp/s/env/pnpm/store')
+  assert.ok(plan.args.includes('--global-bin-dir'))
+  assert.equal(plan.args.at(-1), 'left-pad@1.3.0')
+
+  const root = mkdtempSync(join(tmpdir(), 'pnpm-probe-'))
+  try {
+    const runs = join(root, 'state', 'target-runs'); mkdirSync(runs, { recursive: true })
+    writeFileSync(join(runs, 'a.json'), JSON.stringify({ action: 'install', target: 'pnpm', spec: 'left-pad@1.3.0', state: 'succeeded', args: ['add', '--global', 'left-pad@1.3.0'], startedAt: '2026-01-01T00:00:00Z' }))
+    assert.equal(verifyDeclared(root).items[0].state, 'absent')
+    // Real layout observed on 2026-11-14: env/pnpm/<pnpm-major>/node_modules/<pkg>.
+    const nm = join(root, 'env/pnpm/10/node_modules/left-pad'); mkdirSync(nm, { recursive: true })
+    writeFileSync(join(nm, 'package.json'), '{"name":"left-pad"}')
+    const hit = verifyDeclared(root).items[0]
+    assert.equal(hit.state, 'present')
+    assert.match(hit.evidence, /env\/pnpm\/10\/node_modules\/left-pad\/package\.json$/)
   } finally { rmSync(root, { recursive: true, force: true }) }
 })

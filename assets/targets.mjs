@@ -57,7 +57,12 @@ export function planInstall({ target, spec, scope = 'shared', root = process.env
   let args
   switch (target) {
     case 'npm': args = ['install', '--global', '--prefix', join(root, 'env/npm'), spec]; env.NPM_CONFIG_CACHE = join(root, 'cache/npm'); break
-    case 'pnpm': args = ['add', '--global', '--global-dir', join(root, 'env/pnpm'), '--global-bin-dir', bin, spec]; env.PNPM_HOME = bin; break
+    case 'pnpm':
+      // Pin the store inside the shared root: pnpm otherwise derives it from cwd/PNPM_HOME and
+      // an inconsistent store makes both add and remove fail (observed 2026-11-14).
+      args = ['add', '--global', '--global-dir', join(root, 'env/pnpm'), '--global-bin-dir', bin, '--store-dir', join(root, 'env/pnpm/store'), spec]
+      env.PNPM_HOME = bin
+      break
     case 'bun': args = ['add', '--global', spec]; env.BUN_INSTALL = join(root, 'env/bun'); env.BUN_INSTALL_BIN = bin; break
     case 'uv-tool': args = ['tool', 'install', spec]; env.UV_TOOL_DIR = join(root, 'env/uv-tools'); env.UV_TOOL_BIN_DIR = bin; env.UV_CACHE_DIR = join(root, 'cache/uv'); break
     case 'pipx': args = ['install', spec]; env.PIPX_HOME = join(root, 'env/pipx'); env.PIPX_BIN_DIR = bin; break
@@ -124,6 +129,16 @@ function probe(root, record, platform) {
       const hit = candidates.find(has)
       return hit ? { state: 'present', evidence: hit } : { state: 'absent', evidence: candidates[0] }
     }
+    case 'pnpm': {
+      // pnpm nests a global dir per pnpm major version: env/pnpm/<major>/node_modules/<pkg>.
+      let majors = []
+      try { majors = readdirSync(join(root, 'env/pnpm'), { withFileTypes: true }).filter(e => e.isDirectory() && /^\d+$/.test(e.name)).map(e => e.name) } catch {}
+      for (const major of majors) {
+        const p = join(root, 'env/pnpm', major, 'node_modules', pkg, 'package.json')
+        if (has(p)) return { state: 'present', evidence: p }
+      }
+      return { state: 'absent', evidence: join(root, 'env/pnpm/<major>/node_modules', pkg, 'package.json') }
+    }
     case 'uv-tool': {
       const p = join(root, 'env/uv-tools', pkg)
       return has(p) ? { state: 'present', evidence: p } : { state: 'absent', evidence: p }
@@ -160,7 +175,10 @@ export function planUninstall({ target, spec, root = process.env.DSH_SHARED_ROOT
   let args
   switch (target) {
     case 'npm': args = ['uninstall', '--global', '--prefix', join(root, 'env/npm'), pkg]; break
-    case 'pnpm': args = ['remove', '--global', '--global-dir', join(root, 'env/pnpm'), pkg]; break
+    case 'pnpm':
+      // pnpm remove refuses to run unless its global bin dir is on PATH; executePlan prepends pathEntries.
+      // remove has no --store-dir flag; the config form reaches the same pinned store.
+      args = ['remove', '--global', '--global-dir', join(root, 'env/pnpm'), `--config.store-dir=${join(root, 'env/pnpm/store')}`, pkg]; break
     case 'bun': args = ['remove', '--global', pkg]; break
     case 'uv-tool': args = ['tool', 'uninstall', pkg]; break
     case 'pipx': args = ['uninstall', pkg]; break
@@ -172,7 +190,7 @@ export function planUninstall({ target, spec, root = process.env.DSH_SHARED_ROOT
         note: 'go install has no uninstall; delete the matching binary from bin/ manually', args: [], env: {}, directories: [], pathEntries: [join(root, 'bin')] }
     default: throw new Error(`${target} has no uninstall command here; remove it with the upstream tool`)
   }
-  const env = { ...(target === 'npm' ? { NPM_CONFIG_CACHE: join(root, 'cache/npm') } : {}), ...(target === 'uv-tool' ? { UV_TOOL_DIR: join(root, 'env/uv-tools'), UV_TOOL_BIN_DIR: join(root, 'bin'), UV_CACHE_DIR: join(root, 'cache/uv') } : {}), ...(target === 'pipx' ? { PIPX_HOME: join(root, 'env/pipx'), PIPX_BIN_DIR: join(root, 'bin') } : {}), ...(target === 'mise' ? { MISE_DATA_DIR: join(root, 'env/mise'), MISE_CACHE_DIR: join(root, 'cache/mise') } : {}), ...(target === 'bun' ? { BUN_INSTALL: join(root, 'env/bun') } : {}) }
+  const env = { ...(target === 'npm' ? { NPM_CONFIG_CACHE: join(root, 'cache/npm') } : {}), ...(target === 'uv-tool' ? { UV_TOOL_DIR: join(root, 'env/uv-tools'), UV_TOOL_BIN_DIR: join(root, 'bin'), UV_CACHE_DIR: join(root, 'cache/uv') } : {}), ...(target === 'pipx' ? { PIPX_HOME: join(root, 'env/pipx'), PIPX_BIN_DIR: join(root, 'bin') } : {}), ...(target === 'mise' ? { MISE_DATA_DIR: join(root, 'env/mise'), MISE_CACHE_DIR: join(root, 'cache/mise') } : {}), ...(target === 'bun' ? { BUN_INSTALL: join(root, 'env/bun') } : {}), ...(target === 'pnpm' ? { PNPM_HOME: join(root, 'bin') } : {}) }
   return { schema: 1, action: 'uninstall', target, spec, package: pkg, platform, root, command: commandCandidates(d.executable, platform)[0], commandCandidates: commandCandidates(d.executable, platform), args, env, directories: [], pathEntries: [join(root, 'bin')],
     supported: target !== 'go', note: target === 'go' ? 'go install has no uninstall; delete the binary from bin/ manually' : undefined }
 }

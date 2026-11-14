@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.7 — pnpm 真实冒烟与可核验
+
+- pnpm 安装/卸载固定 `store` 到 `env/pnpm/store`：此前 `PNPM_HOME=bin` 会把 1.9MB store 建进工具目录。
+- `pnpm remove` 要求 global bin dir 在 PATH：两份计划统一 `PNPM_HOME=<root>/bin`（`executePlan` 已注入 PATH）。
+- pnpm 由 `unverifiable` 改为可探测：真实布局是 `env/pnpm/<pnpm-major>/node_modules/<pkg>`；bun/conda/mise 仍标 unverifiable。
+- 真实端到端（pnpm 10.34.5）：装 left-pad → verify present → 卸 → 0 项、bin 干净、store 留在 env。
+
 ## 0.6.6 — 修复活体调用暴露的两个缺陷
 
 重启后真实调用 `shared_lib(action:"targets")` 与 `shared_cases(action:"stats")` 各报一个错，均已修：

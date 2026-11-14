@@ -75,7 +75,7 @@ npm/pnpm/bun/uv-tool/pipx/cargo/conda/mise each get their own uninstall argv in 
 shared target-verify          # JSON: present / absent / unverifiable, exit 1 if anything is absent
 ```
 
-Reads succeeded records from `<root>/state/target-runs/`, keeps the latest per target+spec, and probes only layouts this version knows: npm (`env/npm/**/node_modules/<pkg>/package.json`), uv-tool (`env/uv-tools/<pkg>`), pipx (`env/pipx/venvs/<pkg>/pyvenv.cfg`), cargo (`env/cargo/bin/<pkg or pkg with - → _>`), go (`bin/<last module segment>`). Everything else (pnpm, bun, conda, mise, and cargo when the binary is named differently) reports `unverifiable` — the tool never reports presence it cannot prove. Failed runs are ignored. `present` proves a path exists with the expected layout, not that the package is the version you wanted; pin exact versions in the spec for that.
+Reads succeeded records from `<root>/state/target-runs/`, keeps the latest per target+spec, and probes only layouts this version knows: npm (`env/npm/**/node_modules/<pkg>/package.json`), pnpm (`env/pnpm/<pnpm-major>/node_modules/<pkg>/package.json`), uv-tool (`env/uv-tools/<pkg>`), pipx (`env/pipx/venvs/<pkg>/pyvenv.cfg`), cargo (`env/cargo/bin/<pkg or pkg with - → _>`), go (`bin/<last module segment>`). Everything else (bun, conda, mise, and cargo when the binary is named differently) reports `unverifiable` — the tool never reports presence it cannot prove. Failed runs are ignored. `present` proves a path exists with the expected layout, not that the package is the version you wanted; pin exact versions in the spec for that.
 
 ## Portability
 
@@ -88,3 +88,12 @@ Bundle installed into profile `web` as `dsh-shared-lib@0.6.1`: `application: app
 ## Upgrading an installed link bundle (observed 2026-11-14)
 
 `install_bundle` on an already-installed bundle returns `already-installed`; the way to switch versions is `remove_bundle` then `install_bundle`. With a `link:` target both calls reported `application: restart-required` (`restartReason: unmanaged-plugin`) — the running process holds the old module, so the new code only becomes live after restarting DSH. Profile registration and seeded CLI assets update immediately (`shared version` read 0.6.2), but that is not proof the running plugin is 0.6.2. Treat `restart-required` as "not live yet".
+
+## pnpm specifics (observed on real installs, 2026-11-14)
+
+Two problems only a real install exposes:
+
+1. pnpm derived its **store** from `PNPM_HOME`, so pointing that at `bin/` created `bin/store` (1.9 MB of cache inside the tool directory). Both plans now pin `--store-dir <root>/env/pnpm/store` (install) and `--config.store-dir=<root>/env/pnpm/store` (remove); `remove` has no `--store-dir` flag.
+2. `pnpm remove` aborts with *"The configured global bin directory ... is not in PATH"* unless the global bin dir is on `PATH`. `executePlan` already prepends `<root>/bin`, so both plans set `PNPM_HOME=<root>/bin` — no PATH mutation outside the child process.
+
+Real cycle verified through `shared`: install `left-pad@1.3.0` → `target-verify` `present` (`env/pnpm/5/node_modules/left-pad/package.json`) → `uninstall-target --execute` → verify 0 items, `bin/` clean, store kept under `env/pnpm/store`. An inconsistent store (e.g. deleting it behind pnpm's back) makes both add and remove fail — wipe `env/pnpm` and reinstall rather than patching the store.
