@@ -41,6 +41,11 @@ export function catalog(platform = process.platform) {
     boundaries: { legacyCli: 'Bash required; Linux verified', targetsCli: 'Node native; Linux contract-tested, macOS unverified, Windows execution blocked', remoteHosts: 'not-implemented' } }
 }
 
+/** Windows resolves package CLIs through .cmd/.exe shims; macOS/Linux use the bare name. */
+export function commandCandidates(executable, platform = process.platform) {
+  return platform === 'win32' ? [`${executable}.cmd`, `${executable}.exe`, executable] : [executable]
+}
+
 export function planInstall({ target, spec, scope = 'shared', root = process.env.DSH_SHARED_ROOT || join(homedir(), '.local/share/dsh-shared'), cwd = process.cwd(), platform = process.platform }) {
   const d = definitions.find(x => x.id === target)
   if (!d) throw new Error(`Unknown target: ${target}`)
@@ -64,7 +69,8 @@ export function planInstall({ target, spec, scope = 'shared', root = process.env
       env.MISE_DATA_DIR = join(root, 'env/mise'); env.MISE_CACHE_DIR = join(root, 'cache/mise'); break
   }
   const pathEntries = [bin, join(root, 'env/npm/bin'), join(root, 'env/cargo/bin'), join(root, 'env/bun/bin'), join(root, 'env/mise/shims')]
-  return { schema: 1, target, scope, platform, root, cwd, command: d.executable, args, env, directories: dirs, pathEntries,
+  const candidates = commandCandidates(d.executable, platform)
+  return { schema: 1, target, scope, platform, root, cwd, command: candidates[0], commandCandidates: candidates, args, env, directories: dirs, pathEntries,
     effects: scope === 'project' ? ['Writes mise.toml in the selected workspace', 'May download tools and run upstream installation hooks'] : ['Installs into the selected shared root', 'May download packages and run upstream installation hooks'],
     activation: target === 'mise' && scope === 'shared' ? 'Use mise exec <spec> -- <command> with this plan environment; install alone does not select an active version' : 'Use the reported pathEntries; no system PATH links are changed',
   }
@@ -138,7 +144,7 @@ function probe(root, record, platform) {
 
 export function executePlan(plan, { spawn = spawnSync, inheritedEnv = process.env } = {}) {
   if (plan.platform !== process.platform) throw new Error('Cross-platform execution is not supported')
-  if (process.platform === 'win32') throw new Error('Windows execution is not verified; plan-only until native executable resolution is implemented')
+  if (process.platform === 'win32') throw new Error(`Windows execution is not verified; plan-only. Resume with commandCandidates: ${(plan.commandCandidates || [plan.command]).join(', ')}`)
   const env = { ...inheritedEnv, ...plan.env, PATH: [...plan.pathEntries, inheritedEnv.PATH || ''].join(delimiter) }
   const probe = spawn(plan.command, ['--version'], { cwd: plan.cwd, env, encoding: 'utf8', shell: false, timeout: 5000 })
   if (probe.error || probe.status !== 0) throw new Error(`Target executable unavailable: ${plan.command}: ${probe.error?.message || probe.stderr || probe.status}`)

@@ -137,3 +137,17 @@ test('export carries reproducible target installs; import only prints commands',
     assert.equal(existsSync(join(root, 'env/uv-tools')), false, 'import must not execute upstream managers')
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
+
+test('windows plans use shim candidates while execution stays blocked', async () => {
+  const { planInstall, commandCandidates, executePlan } = await import('../assets/targets.mjs')
+  assert.deepEqual(commandCandidates('npm', 'win32'), ['npm.cmd', 'npm.exe', 'npm'])
+  assert.deepEqual(commandCandidates('npm', 'darwin'), ['npm'])
+  const win = planInstall({ target: 'npm', spec: 'typescript@5', platform: 'win32' })
+  assert.equal(win.command, 'npm.cmd')
+  assert.deepEqual(win.commandCandidates, ['npm.cmd', 'npm.exe', 'npm'])
+  const mac = planInstall({ target: 'uv-tool', spec: 'ruff==0.9', platform: 'darwin' })
+  assert.equal(mac.command, 'uv')
+  if (process.platform !== 'win32') {
+    assert.throws(() => executePlan(win), /Cross-platform execution is not supported/)
+  }
+})

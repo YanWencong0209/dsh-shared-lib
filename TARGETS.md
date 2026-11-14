@@ -43,7 +43,7 @@ Sources mapped to upstream managers: npm, PyPI, crates, Go modules, plus mise Gi
 
 ## Platforms and verification
 
-Node planner/executor has no Bash dependency. Linux execution contracts and CLI integration are tested locally using injected executors; no real package installation was performed. macOS and Windows are declared upstream platform targets but have not been live-tested. Windows execution is explicitly blocked until native executable resolution is implemented; plan generation remains available. Legacy `shared` still requires Bash and GNU readlink; native Windows use the Node entry directly. Host plugin installation and UI activation are unverified and require separate user approval.
+Node planner/executor has no Bash dependency. Linux execution contracts and CLI integration are tested locally using injected executors; no real package installation was performed. macOS and Windows are declared upstream platform targets but have not been live-tested. Windows execution is explicitly blocked. Plans now carry `commandCandidates` (`npm.cmd`, `npm.exe`, `npm` on win32) so the resolution contract is explicit, but no Windows machine was available to verify spawning; enabling execution needs a real test there first. Legacy `shared` still requires Bash and GNU readlink; native Windows use the Node entry directly. Host plugin installation and UI activation are unverified and require separate user approval.
 
 ## Upstream references
 
