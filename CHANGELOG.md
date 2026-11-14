@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.0 — 案例检索覆盖方案与失败尝试
+
+- `search` 同时匹配 `attempts`/`solution`（权重 0.5，头部字段 1.0），返回 `matchedIn: ['head'|'body']` 让调用方知道命中来源。
+- 新增 `limit`（1–20，默认 5，超出夹紧）；排序说明写进返回的 `ranking` 字段。
+- 实测：仅写在 attempts 里的关键词也能命中，且排在头部命中之后。
+
 ## 0.6.9 — 版本漂移检测
 
 - `target-verify` 在能读到版本时给出 `requestedVersion` / `installedVersion` / `matchesSpec`（范围版本或布局无版本时为 `null`），并统计 `drifted`。

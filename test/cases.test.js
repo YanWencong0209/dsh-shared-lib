@@ -160,3 +160,26 @@ test('cases CLI round-trips save/search/read/stats/archive and keeps workspaces 
     assert.equal(JSON.parse(run(ws, ['stats']).stdout).archived, 1)
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
+
+test('search reaches attempts/solution text and reports where it matched', () => {
+  const root = mkdtempSync(join(tmpdir(), 'case-body-'))
+  const s = new CaseStore(root)
+  try {
+    const head = s.save({ ...sample, title: 'busy timeout', problem: 'sqlite locked under load' }, '/w')
+    const body = s.save({ ...sample, title: 'unrelated heading', problem: 'tool crashed on start',
+      attempts: 'tried sqlite locked workaround first', solution: 'serialize writes' }, '/w')
+    const found = s.search('locked', '/w')
+    assert.equal(found.matches.length, 2)
+    // Head match outranks body match.
+    assert.equal(found.matches[0].id, head.id)
+    const bodyHit = found.matches.find(m => m.id === body.id)
+    assert.deepEqual(bodyHit.matchedIn, ['body'])
+    assert.equal(found.matches[0].matchedIn.includes('head'), true)
+    assert.match(found.ranking, /head 1\.0 \/ body 0\.5/)
+
+    const limited = s.search('locked', '/w', Date.now(), { limit: 1 })
+    assert.equal(limited.matches.length, 1)
+    assert.equal(limited.limit, 1)
+    assert.equal(s.search('locked', '/w', Date.now(), { limit: 999 }).matches.length, 2, 'limit is clamped, not rejected')
+  } finally { s.close(); rmSync(root, { recursive: true, force: true }) }
+})

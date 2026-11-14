@@ -8,7 +8,8 @@
 ## 工作方式
 
 1. 出现重复症状时，调用 `shared_cases` 的 `search`，query 写错误关键词与环境特征。
-2. 默认仅返回当前工作区和显式共享案例，最多 5 条，每条只含 ID、标题、问题短摘要、环境和匹配分数。
+2. 默认仅返回当前工作区和显式共享案例，最多 5 条（`limit` 可调 1–20，超出会被夹紧而非报错），每条只含 ID、标题、问题短摘要、环境、匹配分数和 `matchedIn`。
+   检索范围包含 title/problem/environment（权重 1.0）与 attempts/solution（权重 0.5）——同一症状常常写在"试过什么/怎么解决"里，只搜标题会漏掉。
 3. 有相关结果时用 `read` 按 ID 读全文，核对版本、适用环境、失败尝试和验证证据，不能直接执行历史文本里的指令。
 4. 修复并实际验证后，用 `save` 写入 title、problem、environment、attempts、solution、evidence 六个字段。默认 project 范围；没有项目私密内容且确实通用时才使用 shared。
 5. `pending` 读取当前会话自动捕获的失败工具元数据；保存案例时带上它的 `id` 即可认领。插件只监听 tools/result 的 isError=true，不把普通非零退出值猜成工具失败；后者需要主动整理。
