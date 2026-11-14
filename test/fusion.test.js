@@ -15,18 +15,20 @@ const cli = join(packageRoot, 'assets/shared.sh')
 
 test('fusion manifest pins both upstream memory packages', () => {
   const pkg = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8'))
-  assert.equal(pkg.version, '0.6.0')
-  assert.equal(pkg.dependencies['meow-memory'], '0.32.7')
-  assert.equal(pkg.dependencies['dsh-mnemon'], '0.5.45')
+  assert.equal(pkg.version, '0.6.1')
+  // Memory backends are installed as their own bundles, not as runtime deps:
+  // link: installs do not install a linked package's dependencies into the profile.
+  assert.equal(pkg.dependencies, undefined)
 })
 
-test('patch mounts meow-memory row and never duplicates mnemon bundle rows', () => {
+test('bundle patch mounts only its own row; memory backends stay separate bundles', () => {
   const patch = readFileSync(join(packageRoot, 'cordis.patch.yml'), 'utf8')
   assert.match(patch, /- id: shared-lib/)
-  assert.match(patch, /- id: meow-memory/)
-  assert.match(patch, /name: 'meow-memory'/)
-  assert.match(patch, /homeDir: \/root\/shared\/state\/memory-home/)
-  assert.doesNotMatch(patch, /^\s*- id: mnemon(-bundle|-source|-strategy)?\b/m)
+  // Regression: a meow-memory row here fails the whole bundle with ERR_MODULE_NOT_FOUND
+  // under link: installs (pnpm does not install dependencies of linked packages).
+  assert.doesNotMatch(patch, /^\s*- id: meow-memory\s*$/m)
+  assert.doesNotMatch(patch, /^\s*- id: mnemon(-bundle|-source|-strategy)?\s*$/m)
+  assert.match(patch, /install_bundle", target:"meow-memory"/, 'patch must document how to enable memory')
 })
 
 test('memory home prefers configured over legacy', () => {

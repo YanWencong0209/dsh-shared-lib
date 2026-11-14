@@ -1,4 +1,6 @@
-# dsh-shared-lib：共享库（工具 / 开发环境 / 技能）+ 记忆后端
+# dsh-shared-lib：共享库（工具 / 开发环境 / 技能）
+# 本 bundle 只挂载自己的行。记忆后端（meow-memory / dsh-mnemon）作为独立 bundle 安装，
+# 由各自的 patch 负责挂载——不要把它们的 insert 行复制到这里。
 - insert:
     - id: shared-lib
       name: 'dsh-shared-lib'
@@ -14,29 +16,20 @@
         #   - package.json
         #   - requirements.txt
 
-    # ── 记忆后端 1：meow-memory（https://github.com/Phant0Meow/dsh-meow-memory，MIT）
-    # 七层 SQLite 跨会话记忆：soul/user/project/fact/lesson/topic/rules，
-    # 首轮快照注入、关键词命中、反思、dream 空闲整理。包由本 bundle 依赖带入 profile。
-    # 注意：不要再单独启用 meow-memory 自己的 bundle，否则条目 id 重复。
-    # 常用配置项见其 docs/配置参考.md：enabled / projectDir / homeDir / hitTopK / promptLang / dream.*
-    - id: meow-memory
-      name: 'meow-memory'
-      config:
-        # 脑子的数据家迁进共享库（日志/window-index/prompts 覆盖层都落这里，
-        # 首次挂载自动从 ~/.dsh-meow 迁移旧内容）。记忆库本体仍按工作区 .dsh-meow 隔离，属上游设计。
-        # 改了 shared-lib 的 root 时，这里要一起改。
-        homeDir: /root/shared/state/memory-home
-        # promptLang: zh
-        # dream:
-        #   enabled: true
-        #   idleMinutes: 180
-
-    # ── 记忆后端 2：dsh-mnemon（Mnemon 记忆系统，上游 github.com/mnemon-dev/mnemon，Apache-2.0；
-    # 集成包 dsh-mnemon 为 MIT）——刻意【不】在这里插行。
-    # 依据：dsh-mnemon 自带完整 bundle patch（分组 + !!js 表达式），其文档明确禁止把它的
-    # insert 块复制进 profile 补丁——重复条目 id 会让 Settings 无法保存（上游 issue #470）。
-    # 启用方式（二选一，装完本 bundle 之后）：
-    #   1) plugin_manager(action:"install_bundle", target:"dsh-mnemon") —— 作为独立 bundle 挂载并启用；
-    #   2) 保持不启用：只用 meow-memory 一套记忆，避免双注入。
-    # Memory Spaces 的 Mnemon Native provider 需要 mnemon CLI：`shared memory setup-mnemon`
-    # 会把它装进共享 npm prefix（本包 env/npm）并自动软链进 PATH；`shared memory status` 查看两边状态。
+# ── 记忆后端（独立安装，不在此插行）──
+#
+# 为什么不在本 patch 里插 meow-memory：
+#   本 bundle 用 link: 方式安装，pnpm 不会把它的 dependencies 装进 profile 的 node_modules。
+#   若这里写 `name: 'meow-memory'`，Loader 从 profile 根解析不到该包，会得到
+#   ERR_MODULE_NOT_FOUND，使整个 bundle 判为 application: failed（0.6.0 实测）。
+#
+# 启用记忆（二选一，均在装完本 bundle 之后）：
+#   1) plugin_manager(action:"install_bundle", target:"meow-memory")
+#      —— 上游自带 bundle patch，会挂自己的行并带齐依赖；七层 SQLite 跨会话记忆。
+#      数据家建议指向共享库：在 profile 覆盖里给 meow-memory 行加
+#      homeDir: /root/shared/state/memory-home
+#   2) plugin_manager(action:"install_bundle", target:"dsh-mnemon")
+#      —— Mnemon 记忆空间；其 patch 含分组与 !!js 表达式，禁止复制插行（上游 issue #470）。
+#
+# 两套同开会让首轮上下文注入翻倍。用 shared memory status / shared_lib(action:"memory")
+# 看 declared / active / data 三层状态，只有 memory_* 工具可见才算脑子在跑。
