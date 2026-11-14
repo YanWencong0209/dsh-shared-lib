@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { chmodSync, cpSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
+import { spawnSync } from 'node:child_process'
 import { join } from 'node:path'
 import { CaseStore, redact, caseTool } from '../lib/cases.js'
 const sample = {title:'SQLite database locked',problem:'Concurrent SQLite writes fail with database locked',environment:'Node 24 Linux sqlite',attempts:'Retry without busy_timeout failed',solution:'Set busy_timeout and serialize writes',evidence:'Two parallel writes completed; reopened database and checked both rows'}
@@ -119,4 +120,43 @@ test('recency ranking demotes old cases but keeps them findable; prune archives 
     assert.equal(s.read(older.id, '/work'), null)
     assert.deepEqual(s.stats('/work').archived, 1)
   } finally { s.close(); rmSync(root, { recursive: true, force: true }) }
+})
+
+const packageRoot = new URL('..', import.meta.url).pathname
+
+test('cases CLI round-trips save/search/read/stats/archive and keeps workspaces apart', () => {
+  const root = mkdtempSync(join(tmpdir(), 'cases-cli-'))
+  const bin = join(root, 'bin'); mkdirSync(bin, { recursive: true })
+  // Mirror the deployed layout: shared CLI + hidden cases module side by side.
+  cpSync(join(packageRoot, 'assets', 'shared.sh'), join(bin, 'shared'))
+  cpSync(join(packageRoot, 'lib', 'cases.js'), join(bin, '.shared-cases.mjs'))
+  chmodSync(join(bin, 'shared'), 0o755)
+  const ws = join(root, 'ws'); mkdirSync(ws, { recursive: true })
+  const other = join(root, 'other'); mkdirSync(other, { recursive: true })
+  const run = (cwd, args) => spawnSync('bash', [join(bin, 'shared'), 'cases', ...args], {
+    cwd, encoding: 'utf8', env: { ...process.env, DSH_SHARED_ROOT: root, SHARED_LINK_DIR: join(root, 'path'), HOME: join(root, 'home') },
+  })
+  try {
+    const save = run(ws, ['save', '--title', 'sqlite locked', '--problem', 'database is locked under concurrent writes',
+      '--environment', 'node 24 / linux', '--attempts', 'plain retry failed', '--solution', 'set busy_timeout and serialize',
+      '--evidence', 'two parallel writers completed; rows re-read and matched'])
+    assert.equal(save.status, 0, save.stderr)
+    const saved = JSON.parse(save.stdout)
+    assert.ok(saved.id)
+
+    const found = JSON.parse(run(ws, ['search', 'locked']).stdout)
+    assert.equal(found.matches.length, 1)
+    assert.equal(found.matches[0].id, saved.id)
+    assert.equal(JSON.parse(run(other, ['search', 'locked']).stdout).matches.length, 0, 'other workspace must not see it')
+
+    const read = JSON.parse(run(ws, ['read', saved.id]).stdout)
+    assert.equal(read.case.solution, 'set busy_timeout and serialize')
+    assert.equal(read.case.validation, 'model-reported')
+    assert.equal(JSON.parse(run(ws, ['stats']).stdout).active, 1)
+
+    assert.equal(run(ws, ['prune', '0']).status, 1, 'prune needs a positive window')
+    assert.equal(run(ws, ['save', '--title', 'x']).status, 1, 'partial save must fail')
+    assert.deepEqual(JSON.parse(run(ws, ['archive', saved.id]).stdout), { archived: true, id: saved.id })
+    assert.equal(JSON.parse(run(ws, ['stats']).stdout).archived, 1)
+  } finally { rmSync(root, { recursive: true, force: true }) }
 })

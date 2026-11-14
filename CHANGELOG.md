@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.4 — 案例库 CLI
+
+- `shared cases search|read|save|stats|archive|prune|pending`：不依赖插件重载即可用，工作区语义与模型工具一致。
+- 插件铺盘时把案例模块作为隐藏文件 `.shared-cases.mjs` 放到 `bin/`，与 `targets.mjs` 同一模式。
+- 实测：保存→检索→读取→统计→归档全链路；跨工作区不可见；`prune 0` 与不完整 `save` 均退出码 1。
+
 ## 0.6.3 — 目标可卸载
 
 - 新增 `shared uninstall-target <target> <spec> [--execute]` 与 `targets.mjs uninstall`：按管理器给出卸载 argv，`go` 明确返回 `supported:false`。

@@ -18,7 +18,7 @@ HOOK_LOG="$LOG_DIR/hook.log"
 ADOPT_RUN_LOG=""
 MANIFEST="$STATE_DIR/tools.json"
 MANIFEST_SCHEMA=1
-VERSION="0.6.3"
+VERSION="0.6.4"
 
 die() { printf 'shared: %s\n' "$*" >&2; exit 1; }
 info() { printf '%s\n' "$*"; }
@@ -962,6 +962,8 @@ shared $VERSION — 共享库：工具 / 开发环境 / 技能
 
 落点治理
   mode [show|local|shared]  当前工作区的安装模式；local = 不做前置拦截
+  cases search|read|save|stats|archive|prune|pending
+                      排障案例：症状/环境/失败尝试/方案/证据；项目隔离，默认最近 1000 条内关键词排序
   memory [status|setup-mnemon]
                       记忆后端：meow-memory 随 bundle 挂载；setup-mnemon 把 mnemon CLI 装进共享 npm 环境
   adopt [目录] [--dry-run|--yes] [--class A|B|C]
@@ -980,6 +982,13 @@ shared $VERSION — 共享库：工具 / 开发环境 / 技能
 EOF
 }
 
+cases_module() {
+  local base
+  base="$(dirname "$(readlink -f "$0")")"
+  if [ -f "$base/.shared-cases.mjs" ]; then printf '%s' "$base/.shared-cases.mjs"
+  else printf '%s' "$base/cases.mjs"; fi
+}
+
 target_module() {
   local base
   base="$(dirname "$(readlink -f "$0")")"
@@ -991,6 +1000,7 @@ main() {
   local cmd="${1:-help}"; shift || true
   case "$cmd" in
     uninstall-target) DSH_SHARED_ROOT="$ROOT" node "$(target_module)" uninstall "$@" ;;
+    cases) DSH_SHARED_ROOT="$ROOT" node "$(cases_module)" "$@" ;;
     target-verify) DSH_SHARED_ROOT="$ROOT" node "$(target_module)" verify ;;
     target-history) DSH_SHARED_ROOT="$ROOT" node "$(target_module)" history ;;
     targets) DSH_SHARED_ROOT="$ROOT" node "$(target_module)" list "$@" ;;

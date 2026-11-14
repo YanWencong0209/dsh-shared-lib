@@ -32,6 +32,20 @@
 - 仅记录紧凑事实和实际步骤，不保存整轮聊天。全文按需读取。尚未测量真实模型任务的 token 节省比例。
 - SQLite 数据库仅在第一次调用案例工具或捕获失败事件时创建，插件卸载时关闭。当前需要支持 node:sqlite 的 Node 运行时。
 
+## CLI（不依赖插件重载）
+
+```sh
+shared cases stats
+shared cases search "database locked node 24"
+shared cases read <id>
+shared cases save --title ".." --problem ".." --environment ".." --attempts ".." --solution ".." --evidence ".." [--scope shared]
+shared cases archive <id>
+shared cases prune 90          # 只归档，不删除，必须显式给天数
+shared cases pending [session]
+```
+
+工作区由脚本当前目录决定（与模型工具一致），项目隔离即使在 CLI 下也成立。已实测：保存→检索→读取→统计→归档全链路，且 `--title` 缺字段时退出码 1 而不是半条记录。
+
 ## 示例
 
 ```json
