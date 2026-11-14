@@ -18,7 +18,7 @@ HOOK_LOG="$LOG_DIR/hook.log"
 ADOPT_RUN_LOG=""
 MANIFEST="$STATE_DIR/tools.json"
 MANIFEST_SCHEMA=1
-VERSION="0.7.0"
+VERSION="0.7.1"
 
 die() { printf 'shared: %s\n' "$*" >&2; exit 1; }
 info() { printf '%s\n' "$*"; }
@@ -768,7 +768,12 @@ cmd_status() {
     return 0
   fi
 
+  local runtime_ver_hint=""
+  if [ -f "$STATE_DIR/runtime.json" ]; then
+    runtime_ver_hint="$(RUNTIME="$STATE_DIR/runtime.json" node -e 'try{const j=JSON.parse(require("node:fs").readFileSync(process.env.RUNTIME,"utf8"));process.stdout.write(String(j.version||""))}catch{}' 2>/dev/null)"
+  fi
   info "共享库   $ROOT"
+  info "版本     CLI $VERSION / 运行中 ${runtime_ver_hint:-未知}$([ -n "$runtime_ver_hint" ] && [ "$runtime_ver_hint" != "$VERSION" ] && printf '  ← 不一致，需重启 DSH')"
   info "PATH     $LINK_DIR（bin 里的工具软链到这里）"
   info "工具     $tools 个，已进 PATH $linked 个"
   local mpin=0 munpin=0
@@ -930,6 +935,15 @@ cmd_doctor() {
   local health
   health="$(_health_issues)"
   [ -n "$health" ] && { issues+="$health"$'\n'; ok=1; }
+  # A stale process keeps running after the package on disk changed; that is not visible elsewhere.
+  local runtime_ver=""
+  if [ -f "$STATE_DIR/runtime.json" ]; then
+    runtime_ver="$(RUNTIME="$STATE_DIR/runtime.json" node -e 'try{const j=JSON.parse(require("node:fs").readFileSync(process.env.RUNTIME,"utf8"));process.stdout.write(String(j.version||""))}catch{}' 2>/dev/null)"
+  fi
+  if [ -n "$runtime_ver" ] && [ "$runtime_ver" != "$VERSION" ]; then
+    issues+="PLUGIN_STALE|运行中的插件是 $runtime_ver，磁盘上的 CLI/包是 $VERSION——改动未生效|重启 DSH 后重跑 doctor"$'\n'
+    ok=1
+  fi
   # Declared target installs that the filesystem cannot prove must surface as fixable issues.
   local target_absent
   target_absent="$(node "$(target_module)" verify 2>/dev/null | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{const j=JSON.parse(d);for(const i of j.items){if(i.state==="absent")console.log(`TARGET_ABSENT|${i.target} ${i.spec} 已声明但磁盘上找不到|shared install-target ${i.target} "${i.spec}" --execute`);else if(i.matchesSpec===false)console.log(`TARGET_DRIFT|${i.target} ${i.spec} 实际版本 ${i.installedVersion} 与声明不符|shared uninstall-target ${i.target} "${i.spec}" --execute && shared install-target ${i.target} "${i.spec}" --execute`)}}catch{}})' 2>/dev/null)"

@@ -40,3 +40,23 @@ test('技能种子：缺失补齐、未改动则升级、改动后保留', async
     rmSync(work, { recursive: true, force: true })
   }
 })
+
+test('apply stamps the loaded module version for staleness detection', async () => {
+  const work = mkdtempSync(join(tmpdir(), 'shared-stamp-'))
+  const pkg = join(work, 'pkg'); const root = join(work, 'root')
+  try {
+    mkdirSync(root, { recursive: true })
+    cpSync(join(PACKAGE, 'lib'), join(pkg, 'lib'), { recursive: true })
+    cpSync(join(PACKAGE, 'assets'), join(pkg, 'assets'), { recursive: true })
+    cpSync(join(PACKAGE, 'package.json'), join(pkg, 'package.json'))
+    const { apply } = await import(join(pkg, 'lib', 'index.js'))
+    const ctx = {
+      inject(_names, cb) { cb({ shellEnv: { register() {} }, skills: { registerProvider() { return () => {} } }, tools: { register() { return () => {} }, guard() { return () => {} } }, systemPrompt: { section() { return () => {} } } }) },
+      get: () => undefined, logger: { warn() {} }, effect() {},
+    }
+    apply(ctx, { root, linkDir: join(root, 'bin'), intercept: false })
+    const stamp = JSON.parse(readFileSync(join(root, 'state', 'runtime.json'), 'utf8'))
+    assert.equal(stamp.version, JSON.parse(readFileSync(join(pkg, 'package.json'), 'utf8')).version)
+    assert.ok(Date.parse(stamp.appliedAt) > 0)
+  } finally { rmSync(work, { recursive: true, force: true }) }
+})

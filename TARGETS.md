@@ -112,3 +112,7 @@ Verified live on npm 11.17.0: install `left-pad@1.3.0` → `matches true`; editi
 
 - **bun 1.3.3 segfaults in this container** (`panic: Segmentation fault at address 0x7F7F7F7F7F8017`; `bun pm ls -g` also fails with `EBADF`). The bun adapter's argv/env contract is unit-tested, but no real install could be verified here, so bun stays `unverifiable`.
 - pipx and uv are not installed in this container, so those two adapters likewise remain contract-tested only.
+
+## Staleness detection (added 0.7.1)
+
+`apply` writes `<root>/state/runtime.json` with the version of the module this process actually imported. A process that was started before a package update keeps the old value, so `shared status` prints `CLI <version> / 运行中 <version>` and flags a mismatch, and `shared doctor` reports `PLUGIN_STALE` with "restart DSH". This exists because the 0.6.6→0.7.0 fixes were pushed and seeded while the live process kept answering from 0.6.5 for four rounds.

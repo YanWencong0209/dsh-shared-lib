@@ -104,3 +104,23 @@ test('doctor reports version drift with a repair command', () => {
     assert.match(drift[0].fix, /uninstall-target npm "left-pad@1\.3\.0" --execute/)
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
+
+test('doctor flags a running plugin older than the shipped CLI', () => {
+  const { root, linkDir } = setup()
+  try {
+    // Simulate "package updated on disk, process still running the previous module".
+    writeFileSync(join(root, 'state', 'runtime.json'), JSON.stringify({ version: '0.0.1-old', appliedAt: new Date().toISOString() }))
+    const doctor = invoke(root, linkDir, ['doctor', '--json'])
+    assert.notEqual(doctor.status, 0)
+    const stale = JSON.parse(doctor.stdout).issues.filter(i => i.code === 'PLUGIN_STALE')
+    assert.equal(stale.length, 1, doctor.stdout)
+    assert.match(stale[0].message, /0\.0\.1-old/)
+    assert.match(stale[0].fix, /重启 DSH/)
+
+    // Matching versions must not raise it.
+    const version = JSON.parse(readFileSync(new URL('../package.json', import.meta.url).pathname, 'utf8')).version
+    writeFileSync(join(root, 'state', 'runtime.json'), JSON.stringify({ version, appliedAt: new Date().toISOString() }))
+    const okDoctor = invoke(root, linkDir, ['doctor', '--json'])
+    assert.equal(JSON.parse(okDoctor.stdout).issues.filter(i => i.code === 'PLUGIN_STALE').length, 0)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})

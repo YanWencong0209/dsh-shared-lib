@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.1 — 检测"已更新但未重启"
+
+这次踩的坑（进程跑旧模块、磁盘已新版，试了 4 轮才发现）现在由工具自动报出：
+
+- `apply` 时把**本次真正 import 的模块版本**写进 `<root>/state/runtime.json`。旧进程持有的是加载时的旧值，因此"磁盘新、内存旧"可被检测。
+- `shared status` 显示 `CLI <版本> / 运行中 <版本>`，不一致时直接标注「需重启 DSH」。
+- `shared doctor` 新增 `PLUGIN_STALE`（退出码非零），修复命令为「重启 DSH」。
+
 ## 0.7.0 — 案例检索覆盖方案与失败尝试
 
 - `search` 同时匹配 `attempts`/`solution`（权重 0.5，头部字段 1.0），返回 `matchedIn: ['head'|'body']` 让调用方知道命中来源。
