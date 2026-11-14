@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.6 — 修复活体调用暴露的两个缺陷
+
+重启后真实调用 `shared_lib(action:"targets")` 与 `shared_cases(action:"stats")` 各报一个错，均已修：
+
+- `targets`/`memory` 报告返回 `{text, exitCode, state}`，但输出 schema `additionalProperties:false` 只声明 `text`/`exitCode` → 校验拒绝。已在 schema 声明 `state`，并加测试断言返回值不含未声明键。
+- `caseTool` 的转发代理写死 `save/read/search/pending`，schema 里的 `archive/stats/prune` 调用即崩（`store.stats is not a function`）→ 改为通用 Proxy，缺方法时给出明确错误；测试遍历 schema 枚举逐个调用。
+
 ## 0.6.5 — 状态与诊断覆盖目标矩阵/案例库
 
 - `shared status --json` 增 `targets {runs, declared}` 与 `cases {active, archived}`；文本输出加"目标/案例"两行。

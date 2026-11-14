@@ -15,7 +15,7 @@ const cli = join(packageRoot, 'assets/shared.sh')
 
 test('fusion manifest pins both upstream memory packages', () => {
   const pkg = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8'))
-  assert.equal(pkg.version, '0.6.5')
+  assert.equal(pkg.version, '0.6.6')
   // Memory backends are installed as their own bundles, not as runtime deps:
   // link: installs do not install a linked package's dependencies into the profile.
   assert.equal(pkg.dependencies, undefined)
@@ -152,4 +152,45 @@ test('targetsReport summarises matrix, verification and recent runs without exec
     assert.equal(absent.state.absent, 1)
     assert.equal(absent.exitCode, 1, 'absent declared install must be non-zero')
   } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test('every shared_lib action returns only declared output properties', async () => {
+  const { defineSharedTool, targetsReport, memoryReport } = await import(join(packageRoot, 'lib', 'bundle.js'))
+  const root = mkdtempSync(join(tmpdir(), 'tool-schema-'))
+  try {
+    const bin = join(root, 'bin'); mkdirSync(bin, { recursive: true })
+    cpSync(join(packageRoot, 'assets', 'targets.mjs'), join(bin, '.shared-targets.mjs'))
+    const tool = defineSharedTool(root, { get: () => undefined })
+    const declared = Object.keys(tool.output.schema.properties)
+
+    const targets = targetsReport(root)
+    assert.deepEqual(Object.keys(targets).filter(k => !declared.includes(k)), [], 'targets report leaked undeclared keys')
+
+    const memory = memoryReport({ get: () => undefined }, root)
+    assert.deepEqual(Object.keys(memory).filter(k => !declared.includes(k)), [], 'memory report leaked undeclared keys')
+
+    assert.equal(tool.parameters.properties.action.enum.includes('targets'), true)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test('shared_cases forwards every action its schema advertises', async () => {
+  const { caseTool } = await import(join(packageRoot, 'lib', 'cases.js'))
+  const { CaseStore } = await import(join(packageRoot, 'lib', 'cases.js'))
+  const root = mkdtempSync(join(tmpdir(), 'case-proxy-'))
+  try {
+    // Mirror the plugin's proxy: a bare object forwarding to a lazily created store.
+    let store
+    const proxy = new Proxy({}, { get: (_t, method) => typeof method === 'string' ? (...args) => { if (!store) store = new CaseStore(root); const fn = store[method]; if (typeof fn !== 'function') throw new Error(`unsupported case action: ${method}`); return fn.apply(store, args) } : undefined })
+    const tool = caseTool(proxy, () => '/work')
+    const exec = { agent: { id: 's1' } }
+    for (const action of tool.parameters.properties.action.enum) {
+      const args = { action }
+      if (action === 'search') args.query = 'nothing'
+      if (action === 'read' || action === 'archive') args.id = 'missing'
+      if (action === 'prune') args.retentionDays = 30
+      if (action === 'save') Object.assign(args, { title: 't', problem: 'p', environment: 'e', attempts: 'a', solution: 's', evidence: 'ev' })
+      await assert.doesNotReject(async () => tool.execute(args, exec), `${action} must be forwarded`)
+    }
+    assert.equal(tool.parameters.properties.action.enum.includes('stats'), true)
+  } finally { try { store?.close() } catch {} ; rmSync(root, { recursive: true, force: true }) }
 })
