@@ -97,3 +97,12 @@ Two problems only a real install exposes:
 2. `pnpm remove` aborts with *"The configured global bin directory ... is not in PATH"* unless the global bin dir is on `PATH`. `executePlan` already prepends `<root>/bin`, so both plans set `PNPM_HOME=<root>/bin` — no PATH mutation outside the child process.
 
 Real cycle verified through `shared`: install `left-pad@1.3.0` → `target-verify` `present` (`env/pnpm/5/node_modules/left-pad/package.json`) → `uninstall-target --execute` → verify 0 items, `bin/` clean, store kept under `env/pnpm/store`. An inconsistent store (e.g. deleting it behind pnpm's back) makes both add and remove fail — wipe `env/pnpm` and reinstall rather than patching the store.
+
+## Reading the matrix cheaply
+
+`shared targets` prints the full catalog JSON (~5 KB). `shared targets --summary` prints one screen (~0.5 KB): manager list, wired sources, unimplemented sources, declared-install counts and the last three runs. Use `--summary` when you only need to know what is supported; reach for the full JSON (or `shared target-verify`) only when you need per-item evidence paths.
+
+## Environment limits observed (2026-11-14)
+
+- **bun 1.3.3 segfaults in this container** (`panic: Segmentation fault at address 0x7F7F7F7F7F8017`; `bun pm ls -g` also fails with `EBADF`). The bun adapter's argv/env contract is unit-tested, but no real install could be verified here, so bun stays `unverifiable`.
+- pipx and uv are not installed in this container, so those two adapters likewise remain contract-tested only.

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.8 — 紧凑目标视图与安装边界记录
+
+- 新增 `shared targets --summary`（约 0.5 KB，对比完整 JSON 约 5 KB）：管理器/来源/未实现项/声明安装计数/最近三次执行。
+- 记录实测环境限制：**bun 1.3.3 在本容器段错误**（`bun pm ls -g` 亦报 EBADF），bun 仍标 `unverifiable`；pipx/uv 未安装，同样只有契约测试。
+
 ## 0.6.7 — pnpm 真实冒烟与可核验
 
 - pnpm 安装/卸载固定 `store` 到 `env/pnpm/store`：此前 `PNPM_HOME=bin` 会把 1.9MB store 建进工具目录。

@@ -18,7 +18,7 @@ HOOK_LOG="$LOG_DIR/hook.log"
 ADOPT_RUN_LOG=""
 MANIFEST="$STATE_DIR/tools.json"
 MANIFEST_SCHEMA=1
-VERSION="0.6.7"
+VERSION="0.6.8"
 
 die() { printf 'shared: %s\n' "$*" >&2; exit 1; }
 info() { printf '%s\n' "$*"; }
@@ -1015,7 +1015,9 @@ main() {
     cases) DSH_SHARED_ROOT="$ROOT" node "$(cases_module)" "$@" ;;
     target-verify) DSH_SHARED_ROOT="$ROOT" node "$(target_module)" verify ;;
     target-history) DSH_SHARED_ROOT="$ROOT" node "$(target_module)" history ;;
-    targets) DSH_SHARED_ROOT="$ROOT" node "$(target_module)" list "$@" ;;
+    targets)
+      if [ "${1:-}" = "--summary" ]; then DSH_SHARED_ROOT="$ROOT" node "$(target_module)" summary
+      else DSH_SHARED_ROOT="$ROOT" node "$(target_module)" list "$@"; fi ;;
     install-target) DSH_SHARED_ROOT="$ROOT" node "$(target_module)" install "$@" ;;
     status) cmd_status "$@" ;;
     list|ls) cmd_list "$@" ;;

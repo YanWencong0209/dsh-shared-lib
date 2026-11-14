@@ -225,8 +225,31 @@ export function executePlan(plan, { spawn = spawnSync, inheritedEnv = process.en
   }
 }
 
+/** Compact one-screen summary; full catalog JSON costs ~9 KB, this costs ~0.6 KB. */
+export function summaryText(root, platform = process.platform) {
+  const cat = catalog(platform)
+  const verify = verifyDeclared(root, { platform })
+  const history = (() => { try { return readRunRecords(root) } catch { return [] } })()
+  const live = Object.fromEntries(verify.items.map(i => [`${i.target} ${i.spec}`, i.state]))
+  const managers = cat.managers.map(m => `${m.id}${m.supported ? '' : '*'}`).join(', ')
+  const unimplemented = cat.sources.filter(x => x.status === 'not-implemented').map(x => x.id).join(', ')
+  const recent = history.slice(-3).map(r => `${r.action || 'install'} ${r.target} ${r.spec || ''} ${r.state}`)
+  return [
+    `managers(${cat.managers.length}): ${managers}  (* = unsupported on ${platform})`,
+    `sources: ${cat.sources.filter(x => x.status !== 'not-implemented').map(x => x.id).join(', ')} | unimplemented: ${unimplemented}`,
+    `memory targets: ${cat.memory.length} (configuration only, not verified activation)`,
+    `declared installs: ${verify.items.length} | absent: ${verify.absent} | unverifiable: ${verify.unverifiable}`,
+    ...Object.entries(live).map(([k, v]) => `  ${k} → ${v}`),
+    recent.length ? `recent: ${recent.join(' ; ')}` : 'recent: none',
+  ].join('\n')
+}
+
 export function main(argv) {
   const [command, target, spec, ...rest] = argv
+  if (command === 'summary') {
+    const root = process.env.DSH_SHARED_ROOT || join(homedir(), '.local/share/dsh-shared')
+    console.log(summaryText(root)); return 0
+  }
   if (command === 'list' || !command) { console.log(JSON.stringify(catalog(), null, 2)); return 0 }
   if (command === 'history') {
     const root = process.env.DSH_SHARED_ROOT || join(homedir(), '.local/share/dsh-shared')
@@ -254,7 +277,7 @@ export function main(argv) {
     console.log(JSON.stringify(report, null, 2))
     return report.absent > 0 ? 1 : 0
   }
-  if (command !== 'install') throw new Error('Usage: targets.mjs list | verify | history | install TARGET SPEC [--scope shared|project] [--execute] | uninstall TARGET SPEC [--execute]')
+  if (command !== 'install') throw new Error('Usage: targets.mjs list | summary | verify | history | install TARGET SPEC [--scope shared|project] [--execute] | uninstall TARGET SPEC [--execute]')
   let scope = 'shared', execute = false
   for (let i = 0; i < rest.length; i++) {
     if (rest[i] === '--scope') { scope = rest[++i]; if (!scope) throw new Error('--scope needs a value') }

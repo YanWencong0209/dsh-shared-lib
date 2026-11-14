@@ -226,3 +226,20 @@ test('pnpm install keeps the store out of bin and is now probeable', async () =>
     assert.match(hit.evidence, /env\/pnpm\/10\/node_modules\/left-pad\/package\.json$/)
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
+
+test('summary is a compact, accurate one-screen view', async () => {
+  const { summaryText } = await import('../assets/targets.mjs')
+  const root = mkdtempSync(join(tmpdir(), 'targets-summary-'))
+  try {
+    const runs = join(root, 'state', 'target-runs'); mkdirSync(runs, { recursive: true })
+    writeFileSync(join(runs, 'a.json'), JSON.stringify({ action: 'install', target: 'npm', spec: 'left-pad@1.3', state: 'succeeded', args: ['install', '-g', 'left-pad@1.3'], startedAt: '2026-01-01T00:00:00Z' }))
+    const text = summaryText(root)
+    assert.match(text, /managers\(9\): npm, pnpm, bun, uv-tool, pipx, cargo, go, conda, mise/)
+    assert.match(text, /unimplemented: archive, source-build, container/)
+    assert.match(text, /declared installs: 1 \| absent: 1/)
+    assert.match(text, /npm left-pad@1\.3 → absent/)
+    assert.ok(text.length < 1000, `summary must stay small, got ${text.length}`)
+    // The full catalog is an order of magnitude bigger; that is why --summary exists.
+    assert.ok(JSON.stringify((await import('../assets/targets.mjs')).catalog()).length > 2000)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
