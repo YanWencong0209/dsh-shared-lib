@@ -99,3 +99,24 @@ test('saving a case can claim this session\'s incident, leaving pending honest',
     assert.equal(other.incidentId, null)
   } finally { s.close(); rmSync(root, { recursive: true, force: true }) }
 })
+
+test('recency ranking demotes old cases but keeps them findable; prune archives only stale ones', () => {
+  const root = mkdtempSync(join(tmpdir(), 'case-decay-')); const s = new CaseStore(root)
+  try {
+    const newer = s.save({ ...sample, title: 'SQLite locked now' }, '/work')
+    const older = s.save({ ...sample, title: 'SQLite locked old', problem: 'SQLite locked previously', solution: 'other fix' }, '/work')
+    // Backdate the older case one year.
+    s.db.prepare('UPDATE cases SET created=? WHERE id=?').run(new Date(Date.now() - 365 * 86400000).toISOString(), older.id)
+    const ranked = s.search('sqlite locked', '/work')
+    assert.equal(ranked.matches[0].id, newer.id, 'fresh case outranks the year-old one')
+    assert.ok(ranked.matches.some(m => m.id === older.id), 'old case still findable')
+    assert.match(ranked.ranking, /90d half-life/)
+
+    assert.throws(() => s.prune('/work', 0), /positive/)
+    assert.throws(() => s.prune('/work'), /positive/)
+    assert.deepEqual(s.prune('/work', 90).archived, 1)
+    assert.equal(s.search('sqlite locked', '/work').matches.some(m => m.id === older.id), false)
+    assert.equal(s.read(older.id, '/work'), null)
+    assert.deepEqual(s.stats('/work').archived, 1)
+  } finally { s.close(); rmSync(root, { recursive: true, force: true }) }
+})

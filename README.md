@@ -31,7 +31,7 @@ shared doctor --json   # 机器可读诊断和退出状态
 shared list --json     # 工具、技能、Node/Python 清单
 shared memory status   # 记忆后端探测（meow-memory / mnemon）
 shared verify          # 清单完整性离线校验（missing/corrupt 非零退出）
-node --test test/*.test.js   # 51 项回归测试
+node --test test/*.test.js   # 52 项回归测试
 ```
 
 ## 目录
@@ -150,7 +150,7 @@ shared uv|cargo|go ...      # 薄透传，工具没装明确报错（不静默�
 ## 开发
 
 ```bash
-node --test test/*.test.js   # commands/interceptor=拦截规则，hardening/diagnostics=CLI 加固与 JSON，manifest=清单/完整性/复现，fusion=记忆后端配置（手脑分工），seed/provider=资产与技能（51 项，含 targets/cases 模块）
+node --test test/*.test.js   # commands/interceptor=拦截规则，hardening/diagnostics=CLI 加固与 JSON，manifest=清单/完整性/复现，fusion=记忆后端配置（手脑分工），seed/provider=资产与技能（52 项，含 targets/cases 模块）
 ```
 
 改代码后已安装的 profile 需要按 Harness 返回状态决定是否重启；不要通过改入口名规避模块缓存。
