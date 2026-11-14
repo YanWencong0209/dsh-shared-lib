@@ -36,3 +36,20 @@ test('observations are durable, scoped and idempotent without promoting cases',(
   assert.equal(store.db.prepare('SELECT COUNT(*) n FROM observations').get().n,2)
  }finally{store.close();rmSync(root,{recursive:true,force:true})}
 })
+
+test('episodes preserve failure and later return references without inventing a solution',()=>{
+ const root=mkdtempSync(join(tmpdir(),'auto-episodes-'));const s=new CaseStore(root)
+ try {
+  s.observe(exec,{isError:true},'/a')
+  s.observe({...exec,callId:'c2',name:'read'},{isError:false},'/a')
+  s.observe({...exec,callId:'c3'},{isError:false},'/a')
+  const r=s.episodes('/a','s')
+  assert.equal(r.candidates.length,1)
+  assert.equal(r.candidates[0].failureCall,'c')
+  assert.equal(r.candidates[0].laterReturnedCall,'c3')
+  assert.equal(r.candidates[0].taskVerified,false)
+  assert.equal('solution' in r.candidates[0],false)
+  assert.equal(s.episodes('/b','s').candidates.length,0)
+  assert.equal(s.episodes('/a','other-session').candidates.length,0)
+ }finally{s.close();rmSync(root,{recursive:true,force:true})}
+})
