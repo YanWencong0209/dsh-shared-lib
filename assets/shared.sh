@@ -234,8 +234,10 @@ try{for(const d of fs.readdirSync(npmDir)){if(d.startsWith("."))continue;if(d.st
 const python={venv:e.PY_VENV,exists:fs.existsSync(path.join(e.PY_VENV,"bin","python")),packages:[]};
 const pipBin=path.join(e.PY_VENV,"bin","pip");
 if(fs.existsSync(pipBin)){try{const r=require("node:child_process").spawnSync(pipBin,["list","--format=json"],{encoding:"utf8",timeout:5000});python.packages=(JSON.parse(r.stdout||"[]")||[]).map(x=>({name:x.name,version:x.version}))}catch{}}
+const runDir=path.join(e.ROOT,"state","target-runs"),targets=[];
+try{for(const n of fs.readdirSync(runDir)){if(!n.endsWith(".json"))continue;let r;try{r=JSON.parse(fs.readFileSync(path.join(runDir,n),"utf8"))}catch{continue}if(r.state!=="succeeded")continue;targets.push({target:r.target,scope:r.scope||"shared",spec:(r.args||[]).at(-1)||null,cwd:r.cwd||null,finishedAt:r.finishedAt||null})}}catch{}
 const skills=[];const walk=d=>{let xs=[];try{xs=fs.readdirSync(d,{withFileTypes:true})}catch{return}for(const x of xs){if(x.name.startsWith("."))continue;const p=path.join(d,x.name);if(x.isDirectory()){if(fs.existsSync(path.join(p,"SKILL.md")))skills.push(x.name);else walk(p)}else if(x.isFile()&&x.name.endsWith(".md")&&x.name!=="README.md")skills.push(x.name.slice(0,-3))}};walk(e.SKILLS_DIR);
-console.log(JSON.stringify({schema:1,generatedAt:new Date().toISOString(),root:e.ROOT,tools,npmPackages:npm,python,skills},null,2))
+console.log(JSON.stringify({schema:1,generatedAt:new Date().toISOString(),root:e.ROOT,tools,npmPackages:npm,python,skills,targets},null,2))
 NODE
 }
 
@@ -280,6 +282,12 @@ cmd_import() {
   np="$(FILE="$file" node -e 'const d=JSON.parse(require("node:fs").readFileSync(process.env.FILE,"utf8"));console.log((d.npmPackages||[]).length)')"
   pc="$(FILE="$file" node -e 'const d=JSON.parse(require("node:fs").readFileSync(process.env.FILE,"utf8"));console.log((d.python&&d.python.packages||[]).length)')"
   [ "${np:-0}" -gt 0 ] && info "npm 全局包 $np 个需手动：shared npm install -g $(FILE="$file" node -e 'const d=JSON.parse(require("node:fs").readFileSync(process.env.FILE,"utf8"));console.log((d.npmPackages||[]).map(x=>x.name+(x.version?"@"+x.version:"")).join(" "))')"
+  local tn
+  tn="$(FILE="$file" node -e 'const d=JSON.parse(require("node:fs").readFileSync(process.env.FILE,"utf8"));console.log((d.targets||[]).length)')"
+  if [ "${tn:-0}" -gt 0 ]; then
+    info "上游目标 $tn 个需显式安装（不会自动执行）："
+    FILE="$file" node -e 'const d=JSON.parse(require("node:fs").readFileSync(process.env.FILE,"utf8"));for(const t of (d.targets||[]))console.log(`  shared install-target ${t.target} ${t.spec||"<spec>"}${t.scope&&t.scope!=="shared"?" --scope "+t.scope:""} --execute`)'
+  fi
   [ "${pc:-0}" -gt 0 ] && info "python 包 $pc 个需手动：shared pip install $(FILE="$file" node -e 'const d=JSON.parse(require("node:fs").readFileSync(process.env.FILE,"utf8"));console.log((d.python.packages||[]).map(x=>x.name+(x.version?"=="+x.version:"")).join(" "))')"
   return 0
 }

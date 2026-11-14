@@ -65,3 +65,7 @@ shared target-verify          # JSON: present / absent / unverifiable, exit 1 if
 ```
 
 Reads succeeded records from `<root>/state/target-runs/`, keeps the latest per target+spec, and probes only layouts this version knows: npm (`env/npm/**/node_modules/<pkg>/package.json`), uv-tool (`env/uv-tools/<pkg>`), pipx (`env/pipx/venvs/<pkg>/pyvenv.cfg`), cargo (`env/cargo/bin/<pkg or pkg with - → _>`), go (`bin/<last module segment>`). Everything else (pnpm, bun, conda, mise, and cargo when the binary is named differently) reports `unverifiable` — the tool never reports presence it cannot prove. Failed runs are ignored. `present` proves a path exists with the expected layout, not that the package is the version you wanted; pin exact versions in the spec for that.
+
+## Portability
+
+`shared export` now includes a `targets` array built from succeeded install records (target, scope, spec, workspace, finished time). `shared import` never runs upstream managers: it prints one `shared install-target <target> <spec> --execute` line per entry so you decide what to reproduce, in which order, on the new machine. Failed runs are excluded from both.

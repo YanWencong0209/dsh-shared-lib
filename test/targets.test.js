@@ -119,3 +119,21 @@ test('verify proves presence from layout and never guesses success', async () =>
     assert.equal(report.items.some(i => i.spec === 'failed-pkg@1'), false)
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
+
+test('export carries reproducible target installs; import only prints commands', () => {
+  const root = mkdtempSync(join(tmpdir(), 'target-export-'))
+  try {
+    const env = { ...process.env, DSH_SHARED_ROOT: root, SHARED_LINK_DIR: join(root, 'path'), HOME: join(root, 'home') }
+    const run = args => spawnSync('bash', ['assets/shared.sh', ...args], { cwd: process.cwd(), encoding: 'utf8', env })
+    const runs = join(root, 'state', 'target-runs'); mkdirSync(runs, { recursive: true })
+    writeFileSync(join(runs, 'a.json'), JSON.stringify({ target: 'uv-tool', scope: 'shared', state: 'succeeded', args: ['tool', 'install', 'ruff==0.9'], finishedAt: 't1' }))
+    writeFileSync(join(runs, 'b.json'), JSON.stringify({ target: 'npm', scope: 'shared', state: 'failed', args: ['install', '-g', 'x'] }))
+    const snapshot = JSON.parse(run(['export']).stdout)
+    assert.deepEqual(snapshot.targets.map(t => [t.target, t.spec]), [['uv-tool', 'ruff==0.9']])
+
+    const file = join(root, 'snap.json'); writeFileSync(file, JSON.stringify(snapshot))
+    const imported = run(['import', file, '--force'])
+    assert.match(imported.stdout, /shared install-target uv-tool ruff==0\.9 --execute/)
+    assert.equal(existsSync(join(root, 'env/uv-tools')), false, 'import must not execute upstream managers')
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
