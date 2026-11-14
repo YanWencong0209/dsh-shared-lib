@@ -70,7 +70,7 @@ export function planInstall({ target, spec, scope = 'shared', root = process.env
   }
   const pathEntries = [bin, join(root, 'env/npm/bin'), join(root, 'env/cargo/bin'), join(root, 'env/bun/bin'), join(root, 'env/mise/shims')]
   const candidates = commandCandidates(d.executable, platform)
-  return { schema: 1, target, scope, platform, root, cwd, command: candidates[0], commandCandidates: candidates, args, env, directories: dirs, pathEntries,
+  return { schema: 1, action: 'install', target, spec, scope, platform, root, cwd, command: candidates[0], commandCandidates: candidates, args, env, directories: dirs, pathEntries,
     effects: scope === 'project' ? ['Writes mise.toml in the selected workspace', 'May download tools and run upstream installation hooks'] : ['Installs into the selected shared root', 'May download packages and run upstream installation hooks'],
     activation: target === 'mise' && scope === 'shared' ? 'Use mise exec <spec> -- <command> with this plan environment; install alone does not select an active version' : 'Use the reported pathEntries; no system PATH links are changed',
   }
@@ -90,10 +90,17 @@ export function packageOf(spec) {
 export function verifyDeclared(root, { platform = process.platform, readInstallHistory } = {}) {
   root = resolve(root)
   const records = (readInstallHistory ? readInstallHistory() : readRunRecords(root))
-    .filter(r => r.state === 'succeeded')
+    .filter(r => r.state === 'succeeded' || r.state === 'uninstalled')
+    .sort((a, b) => String(a.startedAt).localeCompare(String(b.startedAt)))
+  // Latest successful install wins; a later uninstall removes the declaration entirely.
   const latest = new Map()
-  for (const r of records) latest.set(`${r.target}\u0000${r.args?.at(-1) ?? ''}`, r)
-  const items = [...latest.values()].map(r => ({ target: r.target, spec: r.args?.at(-1) ?? '', ...probe(root, r, platform) }))
+  for (const r of records) {
+    // Identity is target+spec; both records store `spec`, so install and uninstall keys agree.
+    const key = `${r.target}\u0000${r.spec ?? r.args?.filter(a => !String(a).startsWith('-')).at(-1) ?? ''}`
+    if (r.state === 'uninstalled') latest.delete(key)
+    else latest.set(key, r)
+  }
+  const items = [...latest.values()].map(r => ({ target: r.target, spec: r.spec ?? r.args?.filter(a => !String(a).startsWith('-')).at(-1) ?? '', ...probe(root, r, platform) }))
   return { schema: 1, root, platform, items,
     absent: items.filter(i => i.state === 'absent').length,
     unverifiable: items.filter(i => i.state === 'unverifiable').length }
@@ -142,6 +149,34 @@ function probe(root, record, platform) {
   }
 }
 
+/** argv to remove one previously installed target. Go has no uninstall verb. */
+export function planUninstall({ target, spec, root = process.env.DSH_SHARED_ROOT || join(homedir(), '.local/share/dsh-shared'), platform = process.platform }) {
+  const d = definitions.find(x => x.id === target)
+  if (!d) throw new Error(`Unknown target: ${target}`)
+  if (!d.platforms.includes(platform)) throw new Error(`Unsupported platform: ${platform}`)
+  if (typeof spec !== 'string' || !spec || spec.startsWith('-') || /[\s\x00-\x1f]/u.test(spec)) throw new Error('spec must be one non-option package/runtime identifier')
+  root = resolve(root)
+  const pkg = packageOf(spec)
+  let args
+  switch (target) {
+    case 'npm': args = ['uninstall', '--global', '--prefix', join(root, 'env/npm'), pkg]; break
+    case 'pnpm': args = ['remove', '--global', '--global-dir', join(root, 'env/pnpm'), pkg]; break
+    case 'bun': args = ['remove', '--global', pkg]; break
+    case 'uv-tool': args = ['tool', 'uninstall', pkg]; break
+    case 'pipx': args = ['uninstall', pkg]; break
+    case 'cargo': args = ['uninstall', '--root', join(root, 'env/cargo'), pkg]; break
+    case 'conda': args = ['env', 'remove', '--yes', '--prefix', join(root, 'env/conda')]; break
+    case 'mise': args = ['uninstall', spec]; break
+    case 'go':
+      return { schema: 1, action: 'uninstall', target, spec, package: pkg, platform, root, supported: false,
+        note: 'go install has no uninstall; delete the matching binary from bin/ manually', args: [], env: {}, directories: [], pathEntries: [join(root, 'bin')] }
+    default: throw new Error(`${target} has no uninstall command here; remove it with the upstream tool`)
+  }
+  const env = { ...(target === 'npm' ? { NPM_CONFIG_CACHE: join(root, 'cache/npm') } : {}), ...(target === 'uv-tool' ? { UV_TOOL_DIR: join(root, 'env/uv-tools'), UV_TOOL_BIN_DIR: join(root, 'bin'), UV_CACHE_DIR: join(root, 'cache/uv') } : {}), ...(target === 'pipx' ? { PIPX_HOME: join(root, 'env/pipx'), PIPX_BIN_DIR: join(root, 'bin') } : {}), ...(target === 'mise' ? { MISE_DATA_DIR: join(root, 'env/mise'), MISE_CACHE_DIR: join(root, 'cache/mise') } : {}), ...(target === 'bun' ? { BUN_INSTALL: join(root, 'env/bun') } : {}) }
+  return { schema: 1, action: 'uninstall', target, spec, package: pkg, platform, root, command: commandCandidates(d.executable, platform)[0], commandCandidates: commandCandidates(d.executable, platform), args, env, directories: [], pathEntries: [join(root, 'bin')],
+    supported: target !== 'go', note: target === 'go' ? 'go install has no uninstall; delete the binary from bin/ manually' : undefined }
+}
+
 export function executePlan(plan, { spawn = spawnSync, inheritedEnv = process.env } = {}) {
   if (plan.platform !== process.platform) throw new Error('Cross-platform execution is not supported')
   if (process.platform === 'win32') throw new Error(`Windows execution is not verified; plan-only. Resume with commandCandidates: ${(plan.commandCandidates || [plan.command]).join(', ')}`)
@@ -152,13 +187,13 @@ export function executePlan(plan, { spawn = spawnSync, inheritedEnv = process.en
   const runs = join(plan.root, 'state', 'target-runs')
   mkdirSync(runs, { recursive: true })
   const file = join(runs, `${randomUUID()}.json`)
-  const record = { schema: 1, target: plan.target, scope: plan.scope, cwd: plan.cwd, command: plan.command, args: plan.args, startedAt: new Date().toISOString(), state: 'running' }
+  const record = { schema: 1, action: plan.action || 'install', target: plan.target, scope: plan.scope, spec: plan.spec, cwd: plan.cwd, command: plan.command, args: plan.args, startedAt: new Date().toISOString(), state: 'running' }
   writeFileSync(file, JSON.stringify(record, null, 2), { flag: 'wx', mode: 0o600 })
   try {
     const result = spawn(plan.command, plan.args, { cwd: plan.cwd, env, stdio: 'inherit', shell: false })
     record.exitCode = result.status ?? 1
     record.signal = result.signal ?? null
-    record.state = !result.error && result.status === 0 ? 'succeeded' : 'failed'
+    record.state = !result.error && result.status === 0 ? (plan.action === 'uninstall' ? 'uninstalled' : 'succeeded') : 'failed'
     if (result.error) record.error = result.error.message
     if (result.error) throw result.error
     return record.exitCode
@@ -183,13 +218,25 @@ export function main(argv) {
     const records = names.filter(n => n.endsWith('.json')).map(n => JSON.parse(readFileSync(join(dir, n), 'utf8')))
     console.log(JSON.stringify({ schema: 1, records: records.sort((a, b) => a.startedAt.localeCompare(b.startedAt)) }, null, 2)); return 0
   }
+  if (command === 'uninstall') {
+    let scope = 'shared', execute = false
+    const rest0 = rest.slice()
+    for (let i = 0; i < rest0.length; i++) {
+      if (rest0[i] === '--execute') execute = true
+      else throw new Error(`Unknown option: ${rest0[i]}`)
+    }
+    const plan = planUninstall({ target, spec })
+    if (!plan.supported) { console.log(JSON.stringify({ ...plan, executed: false }, null, 2)); return 1 }
+    if (!execute) { console.log(JSON.stringify({ ...plan, executed: false }, null, 2)); return 0 }
+    return executePlan(plan)
+  }
   if (command === 'verify') {
     const root = process.env.DSH_SHARED_ROOT || join(homedir(), '.local/share/dsh-shared')
     const report = verifyDeclared(root)
     console.log(JSON.stringify(report, null, 2))
     return report.absent > 0 ? 1 : 0
   }
-  if (command !== 'install') throw new Error('Usage: targets.mjs list | verify | history | install TARGET SPEC [--scope shared|project] [--execute]')
+  if (command !== 'install') throw new Error('Usage: targets.mjs list | verify | history | install TARGET SPEC [--scope shared|project] [--execute] | uninstall TARGET SPEC [--execute]')
   let scope = 'shared', execute = false
   for (let i = 0; i < rest.length; i++) {
     if (rest[i] === '--scope') { scope = rest[++i]; if (!scope) throw new Error('--scope needs a value') }

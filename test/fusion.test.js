@@ -15,7 +15,7 @@ const cli = join(packageRoot, 'assets/shared.sh')
 
 test('fusion manifest pins both upstream memory packages', () => {
   const pkg = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8'))
-  assert.equal(pkg.version, '0.6.2')
+  assert.equal(pkg.version, '0.6.3')
   // Memory backends are installed as their own bundles, not as runtime deps:
   // link: installs do not install a linked package's dependencies into the profile.
   assert.equal(pkg.dependencies, undefined)

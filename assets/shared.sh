@@ -18,7 +18,7 @@ HOOK_LOG="$LOG_DIR/hook.log"
 ADOPT_RUN_LOG=""
 MANIFEST="$STATE_DIR/tools.json"
 MANIFEST_SCHEMA=1
-VERSION="0.6.2"
+VERSION="0.6.3"
 
 die() { printf 'shared: %s\n' "$*" >&2; exit 1; }
 info() { printf '%s\n' "$*"; }
@@ -235,7 +235,15 @@ const python={venv:e.PY_VENV,exists:fs.existsSync(path.join(e.PY_VENV,"bin","pyt
 const pipBin=path.join(e.PY_VENV,"bin","pip");
 if(fs.existsSync(pipBin)){try{const r=require("node:child_process").spawnSync(pipBin,["list","--format=json"],{encoding:"utf8",timeout:5000});python.packages=(JSON.parse(r.stdout||"[]")||[]).map(x=>({name:x.name,version:x.version}))}catch{}}
 const runDir=path.join(e.ROOT,"state","target-runs"),targets=[];
-try{for(const n of fs.readdirSync(runDir)){if(!n.endsWith(".json"))continue;let r;try{r=JSON.parse(fs.readFileSync(path.join(runDir,n),"utf8"))}catch{continue}if(r.state!=="succeeded")continue;targets.push({target:r.target,scope:r.scope||"shared",spec:(r.args||[]).at(-1)||null,cwd:r.cwd||null,finishedAt:r.finishedAt||null})}}catch{}
+try{
+  // Latest record per target+spec wins; a later uninstall removes the entry from the snapshot.
+  const recs=[];
+  for(const n of fs.readdirSync(runDir)){if(!n.endsWith(".json"))continue;let r;try{r=JSON.parse(fs.readFileSync(path.join(runDir,n),"utf8"))}catch{continue}if(r.state!=="succeeded"&&r.state!=="uninstalled")continue;recs.push(r)}
+  recs.sort((a,b)=>String(a.startedAt).localeCompare(String(b.startedAt)));
+  const live=new Map();
+  for(const r of recs){const k=`${r.target}\u0000${r.spec??(r.args||[]).filter(a=>!String(a).startsWith("-")).at(-1)??""}`;if(r.state==="uninstalled")live.delete(k);else live.set(k,r)}
+  for(const r of live.values())targets.push({target:r.target,scope:r.scope||"shared",spec:r.spec??(r.args||[]).filter(a=>!String(a).startsWith("-")).at(-1)??null,cwd:r.cwd||null,finishedAt:r.finishedAt||null})
+}catch{}
 const skills=[];const walk=d=>{let xs=[];try{xs=fs.readdirSync(d,{withFileTypes:true})}catch{return}for(const x of xs){if(x.name.startsWith("."))continue;const p=path.join(d,x.name);if(x.isDirectory()){if(fs.existsSync(path.join(p,"SKILL.md")))skills.push(x.name);else walk(p)}else if(x.isFile()&&x.name.endsWith(".md")&&x.name!=="README.md")skills.push(x.name.slice(0,-3))}};walk(e.SKILLS_DIR);
 console.log(JSON.stringify({schema:1,generatedAt:new Date().toISOString(),root:e.ROOT,tools,npmPackages:npm,python,skills,targets},null,2))
 NODE
@@ -982,6 +990,7 @@ target_module() {
 main() {
   local cmd="${1:-help}"; shift || true
   case "$cmd" in
+    uninstall-target) DSH_SHARED_ROOT="$ROOT" node "$(target_module)" uninstall "$@" ;;
     target-verify) DSH_SHARED_ROOT="$ROOT" node "$(target_module)" verify ;;
     target-history) DSH_SHARED_ROOT="$ROOT" node "$(target_module)" history ;;
     targets) DSH_SHARED_ROOT="$ROOT" node "$(target_module)" list "$@" ;;

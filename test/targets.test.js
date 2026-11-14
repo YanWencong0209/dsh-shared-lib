@@ -151,3 +151,45 @@ test('windows plans use shim candidates while execution stays blocked', async ()
     assert.throws(() => executePlan(win), /Cross-platform execution is not supported/)
   }
 })
+
+test('uninstall plans per manager and never invents a go uninstall', async () => {
+  const { planUninstall } = await import('../assets/targets.mjs')
+  const npm = planUninstall({ target: 'npm', spec: 'left-pad@1.3.0', root: '/tmp/s' })
+  assert.equal(npm.action, 'uninstall')
+  assert.equal(npm.package, 'left-pad', 'version selector must be stripped')
+  assert.deepEqual(npm.args, ['uninstall', '--global', '--prefix', '/tmp/s/env/npm', 'left-pad'])
+  assert.deepEqual(planUninstall({ target: 'uv-tool', spec: 'ruff==0.9', root: '/tmp/s' }).args, ['tool', 'uninstall', 'ruff==0.9'])
+  assert.deepEqual(planUninstall({ target: 'pipx', spec: 'ruff', root: '/tmp/s' }).args, ['uninstall', 'ruff'])
+  assert.deepEqual(planUninstall({ target: 'cargo', spec: 'ripgrep', root: '/tmp/s' }).args, ['uninstall', '--root', '/tmp/s/env/cargo', 'ripgrep'])
+  assert.equal(planUninstall({ target: 'go', spec: 'example.com/t@v1', root: '/tmp/s' }).supported, false)
+  assert.throws(() => planUninstall({ target: 'npm', spec: '-g' }))
+  assert.throws(() => planUninstall({ target: 'nope', spec: 'x' }))
+})
+
+test('an uninstall record removes the declaration from verify', async () => {
+  const { verifyDeclared } = await import('../assets/targets.mjs')
+  const root = mkdtempSync(join(tmpdir(), 'target-un-'))
+  try {
+    const runs = join(root, 'state', 'target-runs'); mkdirSync(runs, { recursive: true })
+    writeFileSync(join(runs, 'i.json'), JSON.stringify({ action: 'install', target: 'npm', spec: 'left-pad@1.3', state: 'succeeded', args: ['install', '-g', 'left-pad@1.3'], startedAt: '2026-01-01T00:00:00Z' }))
+    assert.equal(verifyDeclared(root).items.length, 1)
+    writeFileSync(join(runs, 'u.json'), JSON.stringify({ action: 'uninstall', target: 'npm', spec: 'left-pad@1.3', state: 'uninstalled', args: ['uninstall', '-g', 'left-pad'], startedAt: '2026-01-02T00:00:00Z' }))
+    const after = verifyDeclared(root)
+    assert.equal(after.items.length, 0, 'uninstalled target must not stay declared')
+    assert.equal(after.absent, 0)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test('export drops targets that were later uninstalled', () => {
+  const root = mkdtempSync(join(tmpdir(), 'target-export-un-'))
+  try {
+    const env = { ...process.env, DSH_SHARED_ROOT: root, SHARED_LINK_DIR: join(root, 'path'), HOME: join(root, 'home') }
+    const run = args => spawnSync('bash', ['assets/shared.sh', ...args], { cwd: process.cwd(), encoding: 'utf8', env })
+    const runs = join(root, 'state', 'target-runs'); mkdirSync(runs, { recursive: true })
+    writeFileSync(join(runs, 'a.json'), JSON.stringify({ action: 'install', target: 'npm', spec: 'left-pad@1.3', state: 'succeeded', args: ['install', '-g', 'left-pad@1.3'], startedAt: '2026-01-01T00:00:00Z' }))
+    writeFileSync(join(runs, 'b.json'), JSON.stringify({ action: 'install', target: 'npm', spec: 'is-number@7', state: 'succeeded', args: ['install', '-g', 'is-number@7'], startedAt: '2026-01-01T00:00:01Z' }))
+    writeFileSync(join(runs, 'c.json'), JSON.stringify({ action: 'uninstall', target: 'npm', spec: 'left-pad@1.3', state: 'uninstalled', args: ['uninstall', '-g', 'left-pad'], startedAt: '2026-01-02T00:00:00Z' }))
+    const snapshot = JSON.parse(run(['export']).stdout)
+    assert.deepEqual(snapshot.targets.map(t => t.spec), ['is-number@7'])
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})

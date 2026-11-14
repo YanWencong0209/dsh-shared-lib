@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.3 — 目标可卸载
+
+- 新增 `shared uninstall-target <target> <spec> [--execute]` 与 `targets.mjs uninstall`：按管理器给出卸载 argv，`go` 明确返回 `supported:false`。
+- 安装/卸载记录统一以 target+spec 为键；卸载成功写 `uninstalled`，同时从 `target-verify` 与 `shared export` 中移除该声明。
+- 修复：卸载键与安装键不一致导致声明清不掉；`export` 仍列出已卸载包。
+- 真实端到端验证（npm 11.17.0）：装 `left-pad@1.3.0` → verify `present` → 卸载 → verify 0 项、磁盘清空、export 为空。
+
 ## 0.6.2 — 目标矩阵进工具面
 
 - `shared_lib(action:"targets")`：一次返回管理器/来源/记忆目标规模、已声明安装的核验摘要、最近 5 条执行记录；只读，安装仍需 CLI `--execute`。

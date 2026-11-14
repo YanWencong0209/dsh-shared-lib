@@ -58,6 +58,17 @@ Node planner/executor has no Bash dependency. Linux execution contracts and CLI 
 
 `shared target-history` (or `node assets/targets.mjs history`) reads independent JSON records in `<root>/state/target-runs/`. Each executed install records its target, scope, argv, workspace, start/end times, outcome and exit status. Preflight failure makes no install record or destination directories. A process killed before completion leaves a `running` record, which means interrupted/unknown, never success. The history is an audit log, not proof that a package remains installed. No credentials or inherited environment are saved.
 
+## Removing a declared install
+
+```sh
+shared uninstall-target npm left-pad@1.3.0            # plan only
+shared uninstall-target npm left-pad@1.3.0 --execute  # runs the upstream uninstall
+```
+
+npm/pnpm/bun/uv-tool/pipx/cargo/conda/mise each get their own uninstall argv in the same isolated root. `go install` has no uninstall verb: the command returns `supported: false` with a note instead of pretending. A successful uninstall writes an `uninstalled` record; it removes the entry from both `target-verify` and `shared export` (latest record per target+spec wins).
+
+**Real end-to-end check (2026-11-14, `npm` 11.17.0):** installed `left-pad@1.3.0` into `/root/shared/env/npm` → `target-verify` reported `present` with evidence `env/npm/lib/node_modules/left-pad/package.json` → `uninstall-target --execute` removed it → `target-verify` returned 0 items, disk empty, `export.targets` empty. Before that check, two defects were found and fixed: uninstall records did not clear the declaration (key mismatch `left-pad@1.3` vs `left-pad`), and `export` still advertised uninstalled packages.
+
 ## Verifying what was installed
 
 ```sh
