@@ -88,3 +88,34 @@ test('real child process receives isolated environment and writes durable succes
     assert.equal(JSON.parse(readFileSync(join(root,'state','target-runs',records[0]),'utf8')).state,'succeeded')
   } finally {rmSync(root,{recursive:true,force:true})}
 })
+
+test('verify proves presence from layout and never guesses success', async () => {
+  const { verifyDeclared, packageOf } = await import('../assets/targets.mjs')
+  assert.equal(packageOf('@scope/pkg@1.2.3'), '@scope/pkg')
+  assert.equal(packageOf('ruff==0.9'), 'ruff==0.9')
+  const root = mkdtempSync(join(tmpdir(), 'target-verify-'))
+  try {
+    const runs = join(root, 'state', 'target-runs'); mkdirSync(runs, { recursive: true })
+    const rec = (target, spec, state = 'succeeded') => writeFileSync(join(runs, `${target}-${spec.replace(/\W/g, '_')}.json`),
+      JSON.stringify({ target, state, args: ['x', spec] }))
+    rec('npm', 'typescript@5')
+    rec('uv-tool', 'ruff==0.9')
+    rec('cargo', 'ripgrep')
+    rec('pnpm', 'serve')
+    rec('npm', 'failed-pkg@1', 'failed')          // failed runs are ignored
+    mkdirSync(join(root, 'env/npm/lib/node_modules/typescript'), { recursive: true })
+    writeFileSync(join(root, 'env/npm/lib/node_modules/typescript/package.json'), '{"name":"typescript"}')
+    mkdirSync(join(root, 'env/cargo/bin'), { recursive: true })
+    writeFileSync(join(root, 'env/cargo/bin/rg'), '')   // different binary name -> absent, not guessed
+
+    const report = verifyDeclared(root)
+    const by = Object.fromEntries(report.items.map(i => [i.spec, i]))
+    assert.equal(by['typescript@5'].state, 'present')
+    assert.equal(by['ruff==0.9'].state, 'absent')
+    assert.equal(by['ripgrep'].state, 'absent', 'must not claim present from an unrelated binary')
+    assert.equal(by['serve'].state, 'unverifiable')
+    assert.equal(report.absent, 2)
+    assert.equal(report.unverifiable, 1)
+    assert.equal(report.items.some(i => i.spec === 'failed-pkg@1'), false)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})

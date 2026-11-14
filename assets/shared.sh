@@ -974,6 +974,7 @@ target_module() {
 main() {
   local cmd="${1:-help}"; shift || true
   case "$cmd" in
+    target-verify) DSH_SHARED_ROOT="$ROOT" node "$(target_module)" verify ;;
     target-history) DSH_SHARED_ROOT="$ROOT" node "$(target_module)" history ;;
     targets) DSH_SHARED_ROOT="$ROOT" node "$(target_module)" list "$@" ;;
     install-target) DSH_SHARED_ROOT="$ROOT" node "$(target_module)" install "$@" ;;

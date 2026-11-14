@@ -1,6 +1,6 @@
 /** Shared target catalog and argv-based installation planner. No shell interpolation. */
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, writeFileSync, readFileSync, readdirSync, renameSync } from 'node:fs'
+import { mkdirSync, writeFileSync, readFileSync, readdirSync, renameSync, existsSync, statSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { resolve, join, delimiter } from 'node:path'
 import { homedir } from 'node:os'
@@ -70,6 +70,72 @@ export function planInstall({ target, spec, scope = 'shared', root = process.env
   }
 }
 
+
+/** Package name without version/selector, e.g. @scope/pkg@1.2 -> @scope/pkg */
+export function packageOf(spec) {
+  const at = spec.indexOf('@', spec.startsWith('@') ? 1 : 0)
+  return at > 0 ? spec.slice(0, at) : spec
+}
+
+/**
+ * Conservative presence probe. Reports only what the filesystem proves:
+ * present, absent, or unverifiable when the manager's layout is not known here.
+ */
+export function verifyDeclared(root, { platform = process.platform, readInstallHistory } = {}) {
+  root = resolve(root)
+  const records = (readInstallHistory ? readInstallHistory() : readRunRecords(root))
+    .filter(r => r.state === 'succeeded')
+  const latest = new Map()
+  for (const r of records) latest.set(`${r.target}\u0000${r.args?.at(-1) ?? ''}`, r)
+  const items = [...latest.values()].map(r => ({ target: r.target, spec: r.args?.at(-1) ?? '', ...probe(root, r, platform) }))
+  return { schema: 1, root, platform, items,
+    absent: items.filter(i => i.state === 'absent').length,
+    unverifiable: items.filter(i => i.state === 'unverifiable').length }
+}
+
+function readRunRecords(root) {
+  const dir = join(root, 'state', 'target-runs')
+  let names = []
+  try { names = readdirSync(dir) } catch (e) { if (e.code !== 'ENOENT') throw e }
+  return names.filter(n => n.endsWith('.json')).map(n => { try { return JSON.parse(readFileSync(join(dir, n), 'utf8')) } catch { return null } }).filter(Boolean)
+}
+
+const has = p => { try { return existsSync(p) } catch { return false } }
+
+function probe(root, record, platform) {
+  const pkg = packageOf(record.args?.at(-1) ?? '')
+  if (!pkg) return { state: 'unverifiable', reason: 'no package identifier in install record' }
+  switch (record.target) {
+    case 'npm': {
+      const candidates = [join(root, 'env/npm/lib/node_modules', pkg, 'package.json'), join(root, 'env/npm/node_modules', pkg, 'package.json')]
+      const hit = candidates.find(has)
+      return hit ? { state: 'present', evidence: hit } : { state: 'absent', evidence: candidates[0] }
+    }
+    case 'uv-tool': {
+      const p = join(root, 'env/uv-tools', pkg)
+      return has(p) ? { state: 'present', evidence: p } : { state: 'absent', evidence: p }
+    }
+    case 'pipx': {
+      const p = join(root, 'env/pipx/venvs', pkg, 'pyvenv.cfg')
+      return has(p) ? { state: 'present', evidence: p } : { state: 'absent', evidence: p }
+    }
+    case 'cargo': {
+      let names = []
+      try { names = readdirSync(join(root, 'env/cargo/bin')) } catch {}
+      const want = pkg.replace(/-/g, '_')
+      const hit = names.find(n => n === pkg || n === want)
+      return hit ? { state: 'present', evidence: join(root, 'env/cargo/bin', hit) } : { state: 'absent', evidence: join(root, 'env/cargo/bin', pkg) }
+    }
+    case 'go': {
+      const base = record.args?.at(-1)?.split('@')[0]?.split('/').pop() ?? ''
+      const p = join(root, pkg.includes('/') ? 'bin' : 'bin', base)
+      return existsSync(p) ? { state: 'present', evidence: p } : { state: 'absent', evidence: p }
+    }
+    default:
+      return { state: 'unverifiable', reason: `${record.target} layout not probed in this version` }
+  }
+}
+
 export function executePlan(plan, { spawn = spawnSync, inheritedEnv = process.env } = {}) {
   if (plan.platform !== process.platform) throw new Error('Cross-platform execution is not supported')
   if (process.platform === 'win32') throw new Error('Windows execution is not verified; plan-only until native executable resolution is implemented')
@@ -111,7 +177,13 @@ export function main(argv) {
     const records = names.filter(n => n.endsWith('.json')).map(n => JSON.parse(readFileSync(join(dir, n), 'utf8')))
     console.log(JSON.stringify({ schema: 1, records: records.sort((a, b) => a.startedAt.localeCompare(b.startedAt)) }, null, 2)); return 0
   }
-  if (command !== 'install') throw new Error('Usage: targets.mjs list | install TARGET SPEC [--scope shared|project] [--execute]')
+  if (command === 'verify') {
+    const root = process.env.DSH_SHARED_ROOT || join(homedir(), '.local/share/dsh-shared')
+    const report = verifyDeclared(root)
+    console.log(JSON.stringify(report, null, 2))
+    return report.absent > 0 ? 1 : 0
+  }
+  if (command !== 'install') throw new Error('Usage: targets.mjs list | verify | history | install TARGET SPEC [--scope shared|project] [--execute]')
   let scope = 'shared', execute = false
   for (let i = 0; i < rest.length; i++) {
     if (rest[i] === '--scope') { scope = rest[++i]; if (!scope) throw new Error('--scope needs a value') }
