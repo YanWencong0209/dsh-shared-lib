@@ -69,3 +69,7 @@ Reads succeeded records from `<root>/state/target-runs/`, keeps the latest per t
 ## Portability
 
 `shared export` now includes a `targets` array built from succeeded install records (target, scope, spec, workspace, finished time). `shared import` never runs upstream managers: it prints one `shared install-target <target> <spec> --execute` line per entry so you decide what to reproduce, in which order, on the new machine. Failed runs are excluded from both.
+
+## Install status (verified 2026-11-14)
+
+Bundle installed into profile `web` as `dsh-shared-lib@0.6.1`: `application: applied`, `warnings: []`. `shared_lib` and `shared_cases` are registered for the agent, both skills appear in the catalog, and the CLI is seeded at `/root/shared/bin/shared`. Verified commands: `status`, `targets` (9 managers / 10 memory targets / 10 sources), `install-target uv-tool ruff==0.9` (plan only, `executed:false`), `target-verify` (empty history → 0 items), `memory status`.
