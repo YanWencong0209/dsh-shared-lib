@@ -67,3 +67,23 @@ test('adopt writes a run manifest with item results', () => {
     rmSync(root, { recursive: true, force: true })
   }
 })
+
+test('status and doctor surface target matrix and case counts', () => {
+  const { root, linkDir } = setup()
+  try {
+    // A declared install that is not on disk must be visible in both status and doctor.
+    const runs = join(root, 'state', 'target-runs'); mkdirSync(runs, { recursive: true })
+    writeFileSync(join(runs, 'a.json'), JSON.stringify({ action: 'install', target: 'npm', spec: 'left-pad@1.3', state: 'succeeded', args: ['install', '-g', 'left-pad@1.3'], startedAt: '2026-01-01T00:00:00Z' }))
+    const status = JSON.parse(invoke(root, linkDir, ['status', '--json']).stdout)
+    assert.deepEqual(status.targets, { runs: 1, declared: 1 })
+    assert.ok('cases' in status)
+
+    const doctor = invoke(root, linkDir, ['doctor', '--json'])
+    assert.notEqual(doctor.status, 0)
+    const health = JSON.parse(doctor.stdout)
+    const absent = health.issues.filter(i => i.code === 'TARGET_ABSENT')
+    assert.equal(absent.length, 1, doctor.stdout)
+    assert.match(absent[0].message, /left-pad@1\.3/)
+    assert.match(absent[0].fix, /shared install-target npm "left-pad@1\.3" --execute/)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})

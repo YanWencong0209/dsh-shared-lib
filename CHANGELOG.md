@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.5 — 状态与诊断覆盖目标矩阵/案例库
+
+- `shared status --json` 增 `targets {runs, declared}` 与 `cases {active, archived}`；文本输出加"目标/案例"两行。
+- `shared doctor` 把"已声明但磁盘找不到"的安装列为 `TARGET_ABSENT` 问题（退出码非零），并给出 `shared install-target <t> "<spec>" --execute` 修复命令。
+- 读取用只读打开（`node:sqlite` readOnly），数据库缺失时降级为 `null` 而不是谎报 0。
+
 ## 0.6.4 — 案例库 CLI
 
 - `shared cases search|read|save|stats|archive|prune|pending`：不依赖插件重载即可用，工作区语义与模型工具一致。

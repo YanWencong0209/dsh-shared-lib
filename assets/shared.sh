@@ -18,7 +18,7 @@ HOOK_LOG="$LOG_DIR/hook.log"
 ADOPT_RUN_LOG=""
 MANIFEST="$STATE_DIR/tools.json"
 MANIFEST_SCHEMA=1
-VERSION="0.6.4"
+VERSION="0.6.5"
 
 die() { printf 'shared: %s\n' "$*" >&2; exit 1; }
 info() { printf '%s\n' "$*"; }
@@ -729,8 +729,11 @@ cmd_memory() {
 
 json_status() {
   local modefile="$1" key="$2" mode="$3" tools="$4" skills="$5" linked="$6" deny="$7" corrected="$8" issues="$9"
-  ROOT="$ROOT" LINK_DIR="$LINK_DIR" MODEFILE="$modefile" WORKSPACE="$key" MODE="$mode" TOOLS="$tools" SKILLS="$skills" LINKED="$linked" DENY="$deny" CORRECTED="$corrected" ISSUES="$issues" VERSION="$VERSION" PY_VENV="$PY_VENV" NPM_PREFIX="$NPM_PREFIX" CACHE_DIR="$CACHE_DIR" MEOW_HOME="$MEOW_HOME" MEOW_STATE="$MEOW_STATE" MEOW_MIGRATE_NOTE="$MEOW_MIGRATE_NOTE" MNEMON_STATE="$MNEMON_STATE" MNEMON_VER="$MNEMON_VER" MANIFEST_P="$MANIFEST" \
-    node -e 'const e=process.env; const fs=require("node:fs"); const lines=(e.ISSUES||"").split("\n").filter(Boolean).map(l=>{const i=l.indexOf("|");const j=l.indexOf("|",i+1);return i<0?{code:"UNKNOWN",message:l,fix:null}:{code:l.slice(0,i),message:l.slice(i+1,j<0?undefined:j),fix:j<0?null:l.slice(j+1)}}); let mpin=0,munpin=0;try{const d=JSON.parse(fs.readFileSync(e.MANIFEST_P,"utf8"));for(const t of Object.values(d.tools||{})){if(t.sha256)mpin++;else munpin++}}catch{} console.log(JSON.stringify({version:e.VERSION,root:e.ROOT,linkDir:e.LINK_DIR,workspace:e.WORKSPACE,mode:e.MODE,tools:Number(e.TOOLS),skills:Number(e.SKILLS),linkedTools:Number(e.LINKED),python:{path:e.PY_VENV,created:fs.existsSync(`${e.PY_VENV}/bin/python`)},npm:{prefix:e.NPM_PREFIX},cache:e.CACHE_DIR,interception:{denied:Number(e.DENY),corrected:Number(e.CORRECTED)},manifest:{pinned:mpin,unpinned:munpin},memory:{meow:{bundled:true,home:e.MEOW_HOME,homeState:e.MEOW_STATE,dbExists:fs.existsSync(`${e.MEOW_HOME}/memory.db`),migrationNote:e.MEOW_MIGRATE_NOTE||null},mnemon:{cliInstalled:e.MNEMON_STATE==="present",version:e.MNEMON_VER||null,bundle:"separate-enable-optional"}},issues:lines}))'
+  ROOT="$ROOT" LINK_DIR="$LINK_DIR" MODEFILE="$modefile" WORKSPACE="$key" MODE="$mode" TOOLS="$tools" SKILLS="$skills" LINKED="$linked" DENY="$deny" CORRECTED="$corrected" ISSUES="$issues" VERSION="$VERSION" PY_VENV="$PY_VENV" NPM_PREFIX="$NPM_PREFIX" CACHE_DIR="$CACHE_DIR" MEOW_HOME="$MEOW_HOME" MEOW_STATE="$MEOW_STATE" MEOW_MIGRATE_NOTE="$MEOW_MIGRATE_NOTE" MNEMON_STATE="$MNEMON_STATE" MNEMON_VER="$MNEMON_VER" MANIFEST_P="$MANIFEST" TARGET_RUNS="$STATE_DIR/target-runs" CASES_DB="$STATE_DIR/cases/cases.sqlite" \
+    node -e 'const e=process.env; const fs=require("node:fs"); const lines=(e.ISSUES||"").split("\n").filter(Boolean).map(l=>{const i=l.indexOf("|");const j=l.indexOf("|",i+1);return i<0?{code:"UNKNOWN",message:l,fix:null}:{code:l.slice(0,i),message:l.slice(i+1,j<0?undefined:j),fix:j<0?null:l.slice(j+1)}}); let mpin=0,munpin=0;try{const d=JSON.parse(fs.readFileSync(e.MANIFEST_P,"utf8"));for(const t of Object.values(d.tools||{})){if(t.sha256)mpin++;else munpin++}}catch{}
+ let targetRuns=0,targetsDeclared=0;try{const recs=fs.readdirSync(e.TARGET_RUNS).filter(n=>n.endsWith(".json")).map(n=>{try{return JSON.parse(fs.readFileSync(e.TARGET_RUNS+"/"+n,"utf8"))}catch{return null}}).filter(Boolean);targetRuns=recs.length;const live=new Map();for(const r of recs.sort((a,b)=>String(a.startedAt).localeCompare(String(b.startedAt)))){if(r.state!=="succeeded"&&r.state!=="uninstalled")continue;const k=`${r.target}\u0000${r.spec??(r.args||[]).filter(a=>!String(a).startsWith("-")).at(-1)??""}`;if(r.state==="uninstalled")live.delete(k);else live.set(k,r)}targetsDeclared=live.size}catch{}
+ let cases={active:null,archived:null};try{const {DatabaseSync}=require("node:sqlite");const db=new DatabaseSync(e.CASES_DB,{readOnly:true});const q=w=>db.prepare(`SELECT COUNT(*) n FROM cases WHERE archived IS ${w}`).get().n;cases={active:q("NULL"),archived:q("NOT NULL")};db.close()}catch{}
+ console.log(JSON.stringify({version:e.VERSION,root:e.ROOT,linkDir:e.LINK_DIR,workspace:e.WORKSPACE,mode:e.MODE,tools:Number(e.TOOLS),skills:Number(e.SKILLS),linkedTools:Number(e.LINKED),python:{path:e.PY_VENV,created:fs.existsSync(`${e.PY_VENV}/bin/python`)},npm:{prefix:e.NPM_PREFIX},cache:e.CACHE_DIR,interception:{denied:Number(e.DENY),corrected:Number(e.CORRECTED)},manifest:{pinned:mpin,unpinned:munpin},targets:{runs:targetRuns,declared:targetsDeclared},cases,memory:{meow:{bundled:true,home:e.MEOW_HOME,homeState:e.MEOW_STATE,dbExists:fs.existsSync(`${e.MEOW_HOME}/memory.db`),migrationNote:e.MEOW_MIGRATE_NOTE||null},mnemon:{cliInstalled:e.MNEMON_STATE==="present",version:e.MNEMON_VER||null,bundle:"separate-enable-optional"}},issues:lines}))'
 }
 
 cmd_status() {
@@ -773,6 +776,11 @@ cmd_status() {
     { IFS=$'\t' read -r mpin munpin; } < <(MFS="$MANIFEST" node -e 'const d=JSON.parse(require("node:fs").readFileSync(process.env.MFS,"utf8"));const t=Object.values(d.tools||{});console.log(t.filter(x=>x.sha256).length+"\t"+t.filter(x=>!x.sha256).length)')
   fi
   info "清单     $MANIFEST（sha256 已 pin $mpin，未 pin $munpin；verify/export 复现）"
+  local tdecl tmiss
+  tdecl="$(node "$(target_module)" verify 2>/dev/null | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{const j=JSON.parse(d);console.log(j.items.length+"\t"+j.absent)}catch{console.log("0\t0")}})' 2>/dev/null)"
+  tdecl="${tdecl:-0	0}"
+  info "目标     $(printf '%s' "$tdecl" | cut -f1) 条已声明安装，$(printf '%s' "$tdecl" | cut -f2) 条核验为 absent（shared target-verify 看细节）"
+  info "案例     $(node "$(cases_module)" stats 2>/dev/null | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{const j=JSON.parse(d);console.log(`活跃 ${j.active} / 归档 ${j.archived}`)}catch{console.log("不可读")}})' 2>/dev/null)"
   info "开发环境 venv=$PY_VENV$([ -x "$PY_VENV/bin/python" ] && echo '（已创建）' || echo '（未创建）')"
   info "         npm=$NPM_PREFIX"
   info "技能     $skills 个（$SKILLS_DIR）"
@@ -922,6 +930,10 @@ cmd_doctor() {
   local health
   health="$(_health_issues)"
   [ -n "$health" ] && { issues+="$health"$'\n'; ok=1; }
+  # Declared target installs that the filesystem cannot prove must surface as fixable issues.
+  local target_absent
+  target_absent="$(node "$(target_module)" verify 2>/dev/null | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{const j=JSON.parse(d);for(const i of j.items)if(i.state==="absent")console.log(`TARGET_ABSENT|${i.target} ${i.spec} 已声明但磁盘上找不到|shared install-target ${i.target} "${i.spec}" --execute`)}catch{}})' 2>/dev/null)"
+  [ -n "$target_absent" ] && { issues+="$target_absent"$'\n'; ok=1; }
   if [ "$json" = 1 ]; then
     ROOT="$ROOT" LINK_DIR="$LINK_DIR" BIN_DIR="$BIN_DIR" PY_VENV="$PY_VENV" NPM_PREFIX="$NPM_PREFIX" CACHE_DIR="$CACHE_DIR" ISSUES="$issues" WARNINGS="$warnings" OK="$ok" VERSION="$VERSION" MEOW_HOME="$MEOW_HOME" MEOW_STATE="$MEOW_STATE" MNEMON_STATE="$MNEMON_STATE" MNEMON_VER="$MNEMON_VER" node -e 'const e=process.env;const issues=(e.ISSUES||"").split("\n").filter(Boolean).map(l=>{const i=l.indexOf("|");const j=l.indexOf("|",i+1);return i<0?{code:"UNKNOWN",message:l,fix:null}:{code:l.slice(0,i),message:l.slice(i+1,j<0?undefined:j),fix:j<0?null:l.slice(j+1)}});const warnings=(e.WARNINGS||"").split("\n").filter(Boolean);console.log(JSON.stringify({version:e.VERSION,ok:e.OK==="0",root:e.ROOT,linkDir:e.LINK_DIR,cliExists:require("node:fs").existsSync(e.BIN_DIR+"/shared"),pythonAvailable:require("node:fs").existsSync(e.PY_VENV+"/bin/python"),npmAvailable:!!require("node:child_process").spawnSync("npm",["--version"],{encoding:"utf8",timeout:3000}).stdout,memory:{meow:{bundled:true,home:e.MEOW_HOME,homeState:e.MEOW_STATE},mnemon:{cliInstalled:e.MNEMON_STATE==="present",version:e.MNEMON_VER||null}},issues,warnings},null,2))'
     return "$ok"
