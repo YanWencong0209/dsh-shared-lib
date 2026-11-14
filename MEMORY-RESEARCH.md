@@ -93,3 +93,13 @@ Full local suite 85/85. Cancellation/timeout tests prove caller waiting ends; un
 ## Stage 3e: explicit Host LLM stream adapter
 
 lib/host-extractor.js adapts the inspected llm.stream GenerateOptions contract to extractCandidate: explicit provider/model, no tools, bounded 4 KB response buffer, require finish.kind=stop. Rejects provider error/aborted/max-tokens/tool-calls and fabricated citations through the shared validation boundary. Instructions treat evidence as untrusted diagnostic data. No adapter is registered or invoked automatically, no live provider call was made, and the input remains caller-supplied filtered evidence. Full local regression 87/87 including simulated Host streams. The adapter has not yet been connected to the Host-owned asynchronous queue lifecycle.
+
+## Stage 3f: scoped evidence hydration boundary
+
+lib/evidence.js reads only a validated allowlist of 1–10 source IDs through an explicitly supplied workspace/session reader. Rejects unauthorized/duplicate IDs before any read, missing or oversized text and batches over 8 KB; checks cancellation and masks common token/Bearer/password patterns. It does not persist source text or infer that the supplied reader enforces authorization. Real Host session-log resolution is still required. Secret masking is deliberately documented as incomplete.
+
+Full regression: 88/88 local tests; no upstream suites or live model calls run. Runtime profile and main unchanged.
+
+## Delivery status and remaining integration
+
+Completed: pinned source comparison, no-prompt metadata capture, scoped episode projection, durable queue with deterministic summaries, explicit extraction/Host-stream/evidence adapter boundaries. These modules are NOT yet a complete automatic semantic memory pipeline. Missing: real Host evidence reader; asynchronous worker ownership/lease/retry; generated-candidate persistence and retrieval; live model cost/quality evaluation. Existing reflection from separately installed meow-memory is not disabled or changed by this branch. Therefore current deployment would not eliminate its reflection prompts. Keep this branch uninstalled until the remaining integration is implemented and reviewed.

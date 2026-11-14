@@ -40,3 +40,15 @@ test('Host adapter rejects provider errors, truncation and oversized streams',as
  assert.throws(()=>hostExtractor({},{}),/service/)
  assert.throws(()=>hostExtractor({stream(){}},{}),/provider and model/)
 })
+
+import { hydrateEvidence } from '../lib/evidence.js'
+test('evidence hydration reads only allowed IDs with explicit scope and masks known tokens',async()=>{
+ const seen=[]
+ const result=await hydrateEvidence({sourceIds:['a'],allowedIds:['a'],scope:{workspace:'/project',session:'s'},read:async args=>{seen.push(args);return 'token=private ghp_ABCDEF'}})
+ assert.equal(seen[0].workspace,'/project');assert.equal(seen[0].session,'s')
+ assert.equal(result[0].text,'token=[REDACTED] [REDACTED]')
+ let called=false
+ await assert.rejects(hydrateEvidence({sourceIds:['outside'],allowedIds:['a'],scope:{workspace:'/p',session:'s'},read:()=>{called=true}}),/Unauthorized/)
+ assert.equal(called,false)
+ await assert.rejects(hydrateEvidence({sourceIds:['a'],allowedIds:['a'],scope:{workspace:'/p',session:'s'},read:async()=>null}),/Missing/)
+})
