@@ -73,3 +73,7 @@ Reads succeeded records from `<root>/state/target-runs/`, keeps the latest per t
 ## Install status (verified 2026-11-14)
 
 Bundle installed into profile `web` as `dsh-shared-lib@0.6.1`: `application: applied`, `warnings: []`. `shared_lib` and `shared_cases` are registered for the agent, both skills appear in the catalog, and the CLI is seeded at `/root/shared/bin/shared`. Verified commands: `status`, `targets` (9 managers / 10 memory targets / 10 sources), `install-target uv-tool ruff==0.9` (plan only, `executed:false`), `target-verify` (empty history → 0 items), `memory status`.
+
+## Upgrading an installed link bundle (observed 2026-11-14)
+
+`install_bundle` on an already-installed bundle returns `already-installed`; the way to switch versions is `remove_bundle` then `install_bundle`. With a `link:` target both calls reported `application: restart-required` (`restartReason: unmanaged-plugin`) — the running process holds the old module, so the new code only becomes live after restarting DSH. Profile registration and seeded CLI assets update immediately (`shared version` read 0.6.2), but that is not proof the running plugin is 0.6.2. Treat `restart-required` as "not live yet".
