@@ -1,7 +1,11 @@
 # dsh-shared-lib
 
+v0.6.0（开发分支 `feature/target-matrix`）目标可核验、排障案例可复用；变更见 [CHANGELOG.md](CHANGELOG.md)。开发分支的新目标目录与安装计划入口见 [TARGETS.md](TARGETS.md)；问题与验证方案的复用入口见 [CASE-MEMORY.md](CASE-MEMORY.md)。
+
 跨工作区、跨会话共用的共享库：**工具 bin、开发环境、技能** 三样东西放一个目录里，
 外加一道前置 guard，拦住「`pip install` / `npm install -g` 装到系统、换个工作区就丢」这条最常见的坑。
+
+v0.5.x（开发分支 feature/target-matrix，未合并未安装）新增目标矩阵与排障案例：`shared targets`/`shared install-target`（默认仅出计划，--execute 才动上游管理器，每次执行留 JSON 记录）、`shared_cases` 排障案例库（详见 TARGETS.md 与 CASE-MEMORY.md）。
 
 v0.4.x 起共享库工具面补齐「声明式清单 + 完整性 + 跨机复现」（借 flox/devbox/mise 的思路，纯 Node 内置实现，零新增运行时 import）：`shared get` 可选 `--sha256`/`--version` 并在通过后写入 `state/tools.json` 清单，`verify` 离线检测缺失/sha256 漂移，`export`/`import` 跨机复现工具，`outdated` 看没记版本的项，`uninstall` 一次删净 bin+软链+清单，另加 `uv/cargo/go` 薄透传（缺失即明确报错，不静默）。`doctor --json` 的 issues 现在是 `{code,message,fix}` 对象，直接给出可执行修复命令（basic-memory doctor 风格）。
 
@@ -27,7 +31,7 @@ shared doctor --json   # 机器可读诊断和退出状态
 shared list --json     # 工具、技能、Node/Python 清单
 shared memory status   # 记忆后端探测（meow-memory / mnemon）
 shared verify          # 清单完整性离线校验（missing/corrupt 非零退出）
-node --test test/*.test.js   # 34 项回归测试
+node --test test/*.test.js   # 72 项回归测试
 ```
 
 ## 目录
@@ -146,7 +150,7 @@ shared uv|cargo|go ...      # 薄透传，工具没装明确报错（不静默�
 ## 开发
 
 ```bash
-node --test test/*.test.js   # commands/interceptor=拦截规则，hardening/diagnostics=CLI 加固与 JSON，manifest=清单/完整性/复现，fusion=记忆后端配置（手脑分工），seed/provider=资产与技能（34 项）
+node --test test/*.test.js   # commands/interceptor=拦截规则，hardening/diagnostics=CLI 加固与 JSON，manifest=清单/完整性/复现，fusion=记忆后端配置（手脑分工），seed/provider=资产与技能（64 项，含 targets/cases 模块）
 ```
 
 改代码后已安装的 profile 需要按 Harness 返回状态决定是否重启；不要通过改入口名规避模块缓存。

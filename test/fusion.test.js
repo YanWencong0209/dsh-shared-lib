@@ -4,7 +4,7 @@
  * meow-memory 的 registry tarball 自带预构建 lib/，安装期不执行构建脚本。
  */
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -15,18 +15,20 @@ const cli = join(packageRoot, 'assets/shared.sh')
 
 test('fusion manifest pins both upstream memory packages', () => {
   const pkg = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8'))
-  assert.equal(pkg.version, '0.4.0')
-  assert.equal(pkg.dependencies['meow-memory'], '0.32.7')
-  assert.equal(pkg.dependencies['dsh-mnemon'], '0.5.45')
+  assert.equal(pkg.version, '0.7.3')
+  // Memory backends are installed as their own bundles, not as runtime deps:
+  // link: installs do not install a linked package's dependencies into the profile.
+  assert.equal(pkg.dependencies, undefined)
 })
 
-test('patch mounts meow-memory row and never duplicates mnemon bundle rows', () => {
+test('bundle patch mounts only its own row; memory backends stay separate bundles', () => {
   const patch = readFileSync(join(packageRoot, 'cordis.patch.yml'), 'utf8')
   assert.match(patch, /- id: shared-lib/)
-  assert.match(patch, /- id: meow-memory/)
-  assert.match(patch, /name: 'meow-memory'/)
-  assert.match(patch, /homeDir: \/root\/shared\/state\/memory-home/)
-  assert.doesNotMatch(patch, /^\s*- id: mnemon(-bundle|-source|-strategy)?\b/m)
+  // Regression: a meow-memory row here fails the whole bundle with ERR_MODULE_NOT_FOUND
+  // under link: installs (pnpm does not install dependencies of linked packages).
+  assert.doesNotMatch(patch, /^\s*- id: meow-memory\s*$/m)
+  assert.doesNotMatch(patch, /^\s*- id: mnemon(-bundle|-source|-strategy)?\s*$/m)
+  assert.match(patch, /install_bundle", target:"meow-memory"/, 'patch must document how to enable memory')
 })
 
 test('memory home prefers configured over legacy', () => {
@@ -54,7 +56,7 @@ test('memory home prefers configured over legacy', () => {
   }
 })
 
-test('memoryReport reads Loader entries for mount truth', async () => {
+test('memoryReport reads Loader entries and reports disabled entries', async () => {
   const { memoryReport } = await import(join(packageRoot, 'lib', 'bundle.js'))
   const ctx = {
     get: name => name === 'configEditor'
@@ -65,7 +67,7 @@ test('memoryReport reads Loader entries for mount truth', async () => {
   assert.equal(report.exitCode, 0)
   assert.match(report.text, /meow-memory/)
   assert.match(report.text, /mnemon（已禁用）/)
-  assert.match(report.text, /Loader/)
+  assert.deepEqual(report.state.declared, ['meow-memory', 'mnemon（已禁用）'])
 })
 
 test('status/doctor JSON expose memory backends', () => {
@@ -98,4 +100,97 @@ test('status/doctor JSON expose memory backends', () => {
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
+})
+
+test('memoryReport separates declared config from runtime activation', async () => {
+  const { memoryReport } = await import(join(packageRoot, 'lib', 'bundle.js'))
+  const base = {
+    get: name => name === 'configEditor'
+      ? { entries: () => [{ options: { id: 'meow-memory' }, disabled: false }] }
+      : undefined,
+  }
+  const inactive = memoryReport(base, '/tmp/unused')
+  assert.deepEqual(inactive.state.declared, ['meow-memory'])
+  assert.deepEqual(inactive.state.active, [])
+  assert.match(inactive.text, /未检测到 memory_\* 工具/)
+  assert.match(inactive.text, /结论只看 active/)
+
+  const active = memoryReport({
+    get: name => name === 'configEditor'
+      ? { entries: () => [{ options: { id: 'meow-memory' }, disabled: false }] }
+      : name === 'tools'
+        ? { schemas: () => [{ name: 'memory_remember' }, { name: 'memory_search' }, { name: 'bash' }] }
+        : undefined,
+  }, '/tmp/unused')
+  assert.deepEqual(active.state.active, ['memory_remember', 'memory_search'])
+  assert.match(active.text, /已注册 2 个/)
+})
+
+test('targetsReport summarises matrix, verification and recent runs without executing', async () => {
+  const { targetsReport } = await import(join(packageRoot, 'lib', 'bundle.js'))
+  const root = mkdtempSync(join(tmpdir(), 'targets-report-'))
+  try {
+    const bin = join(root, 'bin'); mkdirSync(bin, { recursive: true })
+    cpSync(join(packageRoot, 'assets', 'targets.mjs'), join(bin, '.shared-targets.mjs'))
+    const reports = join(root, 'state', 'target-runs'); mkdirSync(reports, { recursive: true })
+
+    // Empty history: nothing declared, nothing absent.
+    const empty = targetsReport(root)
+    assert.equal(empty.state.managers, 9)
+    assert.equal(empty.state.memory, 10)
+    assert.match(empty.text, /npm, pnpm, bun, uv-tool, pipx, cargo, go, conda, mise/)
+    assert.match(empty.text, /未实现：archive, source-build, container/)
+    assert.match(empty.text, /最近执行：无/)
+    assert.match(empty.text, /本工具只读/)
+    assert.equal(empty.exitCode, 0)
+
+    // Declared-but-missing install: rendered, summarised, and signalled.
+    writeFileSync(join(reports, 'r1.json'), JSON.stringify({ target: 'npm', state: 'succeeded', args: ['install', '-g', 'typescript@5'], startedAt: '2026-01-01T00:00:00Z', finishedAt: '2026-01-01T00:00:01Z' }))
+    const absent = targetsReport(root)
+    assert.match(absent.text, /typescript@5 → succeeded/)
+    assert.equal(absent.state.verified, 1)
+    assert.equal(absent.state.absent, 1)
+    assert.equal(absent.exitCode, 1, 'absent declared install must be non-zero')
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test('every shared_lib action returns only declared output properties', async () => {
+  const { defineSharedTool, targetsReport, memoryReport } = await import(join(packageRoot, 'lib', 'bundle.js'))
+  const root = mkdtempSync(join(tmpdir(), 'tool-schema-'))
+  try {
+    const bin = join(root, 'bin'); mkdirSync(bin, { recursive: true })
+    cpSync(join(packageRoot, 'assets', 'targets.mjs'), join(bin, '.shared-targets.mjs'))
+    const tool = defineSharedTool(root, { get: () => undefined })
+    const declared = Object.keys(tool.output.schema.properties)
+
+    const targets = targetsReport(root)
+    assert.deepEqual(Object.keys(targets).filter(k => !declared.includes(k)), [], 'targets report leaked undeclared keys')
+
+    const memory = memoryReport({ get: () => undefined }, root)
+    assert.deepEqual(Object.keys(memory).filter(k => !declared.includes(k)), [], 'memory report leaked undeclared keys')
+
+    assert.equal(tool.parameters.properties.action.enum.includes('targets'), true)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test('shared_cases forwards every action its schema advertises', async () => {
+  const { caseTool } = await import(join(packageRoot, 'lib', 'cases.js'))
+  const { CaseStore } = await import(join(packageRoot, 'lib', 'cases.js'))
+  const root = mkdtempSync(join(tmpdir(), 'case-proxy-'))
+  try {
+    // Mirror the plugin's proxy: a bare object forwarding to a lazily created store.
+    let store
+    const proxy = new Proxy({}, { get: (_t, method) => typeof method === 'string' ? (...args) => { if (!store) store = new CaseStore(root); const fn = store[method]; if (typeof fn !== 'function') throw new Error(`unsupported case action: ${method}`); return fn.apply(store, args) } : undefined })
+    const tool = caseTool(proxy, () => '/work')
+    const exec = { agent: { id: 's1' } }
+    for (const action of tool.parameters.properties.action.enum) {
+      const args = { action }
+      if (action === 'search') args.query = 'nothing'
+      if (action === 'read' || action === 'archive') args.id = 'missing'
+      if (action === 'prune') args.retentionDays = 30
+      if (action === 'save') Object.assign(args, { title: 't', problem: 'p', environment: 'e', attempts: 'a', solution: 's', evidence: 'ev' })
+      await assert.doesNotReject(async () => tool.execute(args, exec), `${action} must be forwarded`)
+    }
+    assert.equal(tool.parameters.properties.action.enum.includes('stats'), true)
+  } finally { try { store?.close() } catch {} ; rmSync(root, { recursive: true, force: true }) }
 })

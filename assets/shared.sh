@@ -18,7 +18,7 @@ HOOK_LOG="$LOG_DIR/hook.log"
 ADOPT_RUN_LOG=""
 MANIFEST="$STATE_DIR/tools.json"
 MANIFEST_SCHEMA=1
-VERSION="0.4.0"
+VERSION="0.7.3"
 
 die() { printf 'shared: %s\n' "$*" >&2; exit 1; }
 info() { printf '%s\n' "$*"; }
@@ -46,6 +46,9 @@ link_dir() {
     done
     [ "$skip" = 1 ] && continue
     [ -f "$src" ] || continue
+    case "$name" in
+      *.tar|*.tar.gz|*.tgz|*.tar.xz|*.txz|*.tar.bz2|*.zip|*.7z|*.gz|*.xz|*.bz2) continue ;;
+    esac
     chmod +x "$src" 2>/dev/null
     dst="$LINK_DIR/$name"
     if [ -L "$dst" ]; then
@@ -180,18 +183,6 @@ cmd_uninstall() {
   info "已卸载 $name 并从清单移除"
 }
 
-cmd_uninstall() {
-  local name="${1:-}"
-  [ -n "$name" ] || die "用法：shared uninstall <名字>"
-  case "$name" in .|..|*[!A-Za-z0-9._-]*) die "非法名字：$name" ;; esac
-  local bin="$BIN_DIR/$name" link="$LINK_DIR/$name"
-  [ -e "$bin" ] || [ -L "$link" ] || die "没有登记的工具：$name（bin 和软链都不存在）"
-  [ -L "$link" ] && { rm -f "$link" && info "移除软链 $link" || die "移除软链失败：$link"; }
-  [ -e "$bin" ] && { rm -f "$bin" && info "移除 bin 文件 $bin" || die "移除 bin 失败：$bin"; }
-  manifest_delete "$name"
-  info "已卸载 $name 并从清单移除"
-}
-
 cmd_verify() {
   local json=0
   [ "${1:-}" = "--json" ] && json=1
@@ -246,8 +237,18 @@ try{for(const d of fs.readdirSync(npmDir)){if(d.startsWith("."))continue;if(d.st
 const python={venv:e.PY_VENV,exists:fs.existsSync(path.join(e.PY_VENV,"bin","python")),packages:[]};
 const pipBin=path.join(e.PY_VENV,"bin","pip");
 if(fs.existsSync(pipBin)){try{const r=require("node:child_process").spawnSync(pipBin,["list","--format=json"],{encoding:"utf8",timeout:5000});python.packages=(JSON.parse(r.stdout||"[]")||[]).map(x=>({name:x.name,version:x.version}))}catch{}}
+const runDir=path.join(e.ROOT,"state","target-runs"),targets=[];
+try{
+  // Latest record per target+spec wins; a later uninstall removes the entry from the snapshot.
+  const recs=[];
+  for(const n of fs.readdirSync(runDir)){if(!n.endsWith(".json"))continue;let r;try{r=JSON.parse(fs.readFileSync(path.join(runDir,n),"utf8"))}catch{continue}if(r.state!=="succeeded"&&r.state!=="uninstalled")continue;recs.push(r)}
+  recs.sort((a,b)=>String(a.startedAt).localeCompare(String(b.startedAt)));
+  const live=new Map();
+  for(const r of recs){const k=`${r.target}\u0000${r.spec??(r.args||[]).filter(a=>!String(a).startsWith("-")).at(-1)??""}`;if(r.state==="uninstalled")live.delete(k);else live.set(k,r)}
+  for(const r of live.values())targets.push({target:r.target,scope:r.scope||"shared",spec:r.spec??(r.args||[]).filter(a=>!String(a).startsWith("-")).at(-1)??null,cwd:r.cwd||null,finishedAt:r.finishedAt||null})
+}catch{}
 const skills=[];const walk=d=>{let xs=[];try{xs=fs.readdirSync(d,{withFileTypes:true})}catch{return}for(const x of xs){if(x.name.startsWith("."))continue;const p=path.join(d,x.name);if(x.isDirectory()){if(fs.existsSync(path.join(p,"SKILL.md")))skills.push(x.name);else walk(p)}else if(x.isFile()&&x.name.endsWith(".md")&&x.name!=="README.md")skills.push(x.name.slice(0,-3))}};walk(e.SKILLS_DIR);
-console.log(JSON.stringify({schema:1,generatedAt:new Date().toISOString(),root:e.ROOT,tools,npmPackages:npm,python,skills},null,2))
+console.log(JSON.stringify({schema:1,generatedAt:new Date().toISOString(),root:e.ROOT,tools,npmPackages:npm,python,skills,targets},null,2))
 NODE
 }
 
@@ -292,6 +293,12 @@ cmd_import() {
   np="$(FILE="$file" node -e 'const d=JSON.parse(require("node:fs").readFileSync(process.env.FILE,"utf8"));console.log((d.npmPackages||[]).length)')"
   pc="$(FILE="$file" node -e 'const d=JSON.parse(require("node:fs").readFileSync(process.env.FILE,"utf8"));console.log((d.python&&d.python.packages||[]).length)')"
   [ "${np:-0}" -gt 0 ] && info "npm 全局包 $np 个需手动：shared npm install -g $(FILE="$file" node -e 'const d=JSON.parse(require("node:fs").readFileSync(process.env.FILE,"utf8"));console.log((d.npmPackages||[]).map(x=>x.name+(x.version?"@"+x.version:"")).join(" "))')"
+  local tn
+  tn="$(FILE="$file" node -e 'const d=JSON.parse(require("node:fs").readFileSync(process.env.FILE,"utf8"));console.log((d.targets||[]).length)')"
+  if [ "${tn:-0}" -gt 0 ]; then
+    info "上游目标 $tn 个需显式安装（不会自动执行）："
+    FILE="$file" node -e 'const d=JSON.parse(require("node:fs").readFileSync(process.env.FILE,"utf8"));for(const t of (d.targets||[]))console.log(`  shared install-target ${t.target} ${t.spec||"<spec>"}${t.scope&&t.scope!=="shared"?" --scope "+t.scope:""} --execute`)'
+  fi
   [ "${pc:-0}" -gt 0 ] && info "python 包 $pc 个需手动：shared pip install $(FILE="$file" node -e 'const d=JSON.parse(require("node:fs").readFileSync(process.env.FILE,"utf8"));console.log((d.python.packages||[]).map(x=>x.name+(x.version?"=="+x.version:"")).join(" "))')"
   return 0
 }
@@ -703,7 +710,7 @@ cmd_memory() {
   case "$sub" in
     status)
       info "记忆后端（best-effort 探测，不代表插件运行时状态）"
-      info "  meow-memory   已随 bundle 挂载（脑子）；数据家 $MEOW_HOME（$MEOW_STATE）$MEOW_MIGRATE_NOTE；记忆库本体按工作区 .dsh-meow/memory.db 隔离"
+      info "  meow-memory   随包声明（激活未验证）；数据家 $MEOW_HOME（$MEOW_STATE）$MEOW_MIGRATE_NOTE；记忆库本体按工作区 .dsh-meow/memory.db 隔离"
       if [ "$MNEMON_STATE" = present ]; then
         info "  mnemon CLI    $MNEMON_VER（可选；Memory Spaces 的 Mnemon Native provider 需要）"
       else
@@ -725,8 +732,11 @@ cmd_memory() {
 
 json_status() {
   local modefile="$1" key="$2" mode="$3" tools="$4" skills="$5" linked="$6" deny="$7" corrected="$8" issues="$9"
-  ROOT="$ROOT" LINK_DIR="$LINK_DIR" MODEFILE="$modefile" WORKSPACE="$key" MODE="$mode" TOOLS="$tools" SKILLS="$skills" LINKED="$linked" DENY="$deny" CORRECTED="$corrected" ISSUES="$issues" VERSION="$VERSION" PY_VENV="$PY_VENV" NPM_PREFIX="$NPM_PREFIX" CACHE_DIR="$CACHE_DIR" MEOW_HOME="$MEOW_HOME" MEOW_STATE="$MEOW_STATE" MEOW_MIGRATE_NOTE="$MEOW_MIGRATE_NOTE" MNEMON_STATE="$MNEMON_STATE" MNEMON_VER="$MNEMON_VER" MANIFEST_P="$MANIFEST" \
-    node -e 'const e=process.env; const fs=require("node:fs"); const lines=(e.ISSUES||"").split("\n").filter(Boolean).map(l=>{const i=l.indexOf("|");const j=l.indexOf("|",i+1);return i<0?{code:"UNKNOWN",message:l,fix:null}:{code:l.slice(0,i),message:l.slice(i+1,j<0?undefined:j),fix:j<0?null:l.slice(j+1)}}); let mpin=0,munpin=0;try{const d=JSON.parse(fs.readFileSync(e.MANIFEST_P,"utf8"));for(const t of Object.values(d.tools||{})){if(t.sha256)mpin++;else munpin++}}catch{} console.log(JSON.stringify({version:e.VERSION,root:e.ROOT,linkDir:e.LINK_DIR,workspace:e.WORKSPACE,mode:e.MODE,tools:Number(e.TOOLS),skills:Number(e.SKILLS),linkedTools:Number(e.LINKED),python:{path:e.PY_VENV,created:fs.existsSync(`${e.PY_VENV}/bin/python`)},npm:{prefix:e.NPM_PREFIX},cache:e.CACHE_DIR,interception:{denied:Number(e.DENY),corrected:Number(e.CORRECTED)},manifest:{pinned:mpin,unpinned:munpin},memory:{meow:{bundled:true,home:e.MEOW_HOME,homeState:e.MEOW_STATE,dbExists:fs.existsSync(`${e.MEOW_HOME}/memory.db`),migrationNote:e.MEOW_MIGRATE_NOTE||null},mnemon:{cliInstalled:e.MNEMON_STATE==="present",version:e.MNEMON_VER||null,bundle:"separate-enable-optional"}},issues:lines}))'
+  ROOT="$ROOT" LINK_DIR="$LINK_DIR" MODEFILE="$modefile" WORKSPACE="$key" MODE="$mode" TOOLS="$tools" SKILLS="$skills" LINKED="$linked" DENY="$deny" CORRECTED="$corrected" ISSUES="$issues" VERSION="$VERSION" PY_VENV="$PY_VENV" NPM_PREFIX="$NPM_PREFIX" CACHE_DIR="$CACHE_DIR" MEOW_HOME="$MEOW_HOME" MEOW_STATE="$MEOW_STATE" MEOW_MIGRATE_NOTE="$MEOW_MIGRATE_NOTE" MNEMON_STATE="$MNEMON_STATE" MNEMON_VER="$MNEMON_VER" MANIFEST_P="$MANIFEST" TARGET_RUNS="$STATE_DIR/target-runs" CASES_DB="$STATE_DIR/cases/cases.sqlite" \
+    node -e 'const e=process.env; const fs=require("node:fs"); const lines=(e.ISSUES||"").split("\n").filter(Boolean).map(l=>{const i=l.indexOf("|");const j=l.indexOf("|",i+1);return i<0?{code:"UNKNOWN",message:l,fix:null}:{code:l.slice(0,i),message:l.slice(i+1,j<0?undefined:j),fix:j<0?null:l.slice(j+1)}}); let mpin=0,munpin=0;try{const d=JSON.parse(fs.readFileSync(e.MANIFEST_P,"utf8"));for(const t of Object.values(d.tools||{})){if(t.sha256)mpin++;else munpin++}}catch{}
+ let targetRuns=0,targetsDeclared=0;try{const recs=fs.readdirSync(e.TARGET_RUNS).filter(n=>n.endsWith(".json")).map(n=>{try{return JSON.parse(fs.readFileSync(e.TARGET_RUNS+"/"+n,"utf8"))}catch{return null}}).filter(Boolean);targetRuns=recs.length;const live=new Map();for(const r of recs.sort((a,b)=>String(a.startedAt).localeCompare(String(b.startedAt)))){if(r.state!=="succeeded"&&r.state!=="uninstalled")continue;const k=`${r.target}\u0000${r.spec??(r.args||[]).filter(a=>!String(a).startsWith("-")).at(-1)??""}`;if(r.state==="uninstalled")live.delete(k);else live.set(k,r)}targetsDeclared=live.size}catch{}
+ let cases={active:null,archived:null};try{const {DatabaseSync}=require("node:sqlite");const db=new DatabaseSync(e.CASES_DB,{readOnly:true});const q=w=>db.prepare(`SELECT COUNT(*) n FROM cases WHERE archived IS ${w}`).get().n;cases={active:q("NULL"),archived:q("NOT NULL")};db.close()}catch{}
+ console.log(JSON.stringify({version:e.VERSION,root:e.ROOT,linkDir:e.LINK_DIR,workspace:e.WORKSPACE,mode:e.MODE,tools:Number(e.TOOLS),skills:Number(e.SKILLS),linkedTools:Number(e.LINKED),python:{path:e.PY_VENV,created:fs.existsSync(`${e.PY_VENV}/bin/python`)},npm:{prefix:e.NPM_PREFIX},cache:e.CACHE_DIR,interception:{denied:Number(e.DENY),corrected:Number(e.CORRECTED)},manifest:{pinned:mpin,unpinned:munpin},targets:{runs:targetRuns,declared:targetsDeclared},cases,memory:{meow:{bundled:true,home:e.MEOW_HOME,homeState:e.MEOW_STATE,dbExists:fs.existsSync(`${e.MEOW_HOME}/memory.db`),migrationNote:e.MEOW_MIGRATE_NOTE||null},mnemon:{cliInstalled:e.MNEMON_STATE==="present",version:e.MNEMON_VER||null,bundle:"separate-enable-optional"}},issues:lines}))'
 }
 
 cmd_status() {
@@ -761,7 +771,12 @@ cmd_status() {
     return 0
   fi
 
+  local runtime_ver_hint=""
+  if [ -f "$STATE_DIR/runtime.json" ]; then
+    runtime_ver_hint="$(RUNTIME="$STATE_DIR/runtime.json" node -e 'try{const j=JSON.parse(require("node:fs").readFileSync(process.env.RUNTIME,"utf8"));process.stdout.write(String(j.version||""))}catch{}' 2>/dev/null)"
+  fi
   info "共享库   $ROOT"
+  info "版本     CLI $VERSION / 运行中 ${runtime_ver_hint:-未知}$([ -n "$runtime_ver_hint" ] && [ "$runtime_ver_hint" != "$VERSION" ] && printf '  ← 不一致，需重启 DSH')"
   info "PATH     $LINK_DIR（bin 里的工具软链到这里）"
   info "工具     $tools 个，已进 PATH $linked 个"
   local mpin=0 munpin=0
@@ -769,6 +784,11 @@ cmd_status() {
     { IFS=$'\t' read -r mpin munpin; } < <(MFS="$MANIFEST" node -e 'const d=JSON.parse(require("node:fs").readFileSync(process.env.MFS,"utf8"));const t=Object.values(d.tools||{});console.log(t.filter(x=>x.sha256).length+"\t"+t.filter(x=>!x.sha256).length)')
   fi
   info "清单     $MANIFEST（sha256 已 pin $mpin，未 pin $munpin；verify/export 复现）"
+  local tdecl tmiss
+  tdecl="$(node "$(target_module)" verify 2>/dev/null | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{const j=JSON.parse(d);console.log(j.items.length+"\t"+j.absent)}catch{console.log("0\t0")}})' 2>/dev/null)"
+  tdecl="${tdecl:-0	0}"
+  info "目标     $(printf '%s' "$tdecl" | cut -f1) 条已声明安装，$(printf '%s' "$tdecl" | cut -f2) 条核验为 absent（shared target-verify 看细节）"
+  info "案例     $(node "$(cases_module)" stats 2>/dev/null | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{const j=JSON.parse(d);console.log(`活跃 ${j.active} / 归档 ${j.archived}`)}catch{console.log("不可读")}})' 2>/dev/null)"
   info "开发环境 venv=$PY_VENV$([ -x "$PY_VENV/bin/python" ] && echo '（已创建）' || echo '（未创建）')"
   info "         npm=$NPM_PREFIX"
   info "技能     $skills 个（$SKILLS_DIR）"
@@ -782,7 +802,7 @@ cmd_status() {
   info "拦截     $deny 次，其中模型改用 shared 命令 $corrected 次"
   local mem_mnemon
   if [ "$MNEMON_STATE" = present ]; then mem_mnemon="已装（$MNEMON_VER）"; else mem_mnemon="未装（可选：shared memory setup-mnemon）"; fi
-  info "记忆     meow-memory 已挂载（$MEOW_HOME：$MEOW_STATE$MEOW_MIGRATE_NOTE）；mnemon CLI $mem_mnemon"
+  info "记忆     meow-memory 随包声明（$MEOW_HOME：$MEOW_STATE$MEOW_MIGRATE_NOTE）；mnemon CLI $mem_mnemon"
 
   local issues
   issues="$(_health_issues)"
@@ -918,6 +938,19 @@ cmd_doctor() {
   local health
   health="$(_health_issues)"
   [ -n "$health" ] && { issues+="$health"$'\n'; ok=1; }
+  # A stale process keeps running after the package on disk changed; that is not visible elsewhere.
+  local runtime_ver=""
+  if [ -f "$STATE_DIR/runtime.json" ]; then
+    runtime_ver="$(RUNTIME="$STATE_DIR/runtime.json" node -e 'try{const j=JSON.parse(require("node:fs").readFileSync(process.env.RUNTIME,"utf8"));process.stdout.write(String(j.version||""))}catch{}' 2>/dev/null)"
+  fi
+  if [ -n "$runtime_ver" ] && [ "$runtime_ver" != "$VERSION" ]; then
+    issues+="PLUGIN_STALE|运行中的插件是 $runtime_ver，磁盘上的 CLI/包是 $VERSION——改动未生效|重启 DSH 后重跑 doctor"$'\n'
+    ok=1
+  fi
+  # Declared target installs that the filesystem cannot prove must surface as fixable issues.
+  local target_absent
+  target_absent="$(node "$(target_module)" verify 2>/dev/null | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{const j=JSON.parse(d);for(const i of j.items){if(i.state==="absent")console.log(`TARGET_ABSENT|${i.target} ${i.spec} 已声明但磁盘上找不到|shared install-target ${i.target} "${i.spec}" --execute`);else if(i.matchesSpec===false)console.log(`TARGET_DRIFT|${i.target} ${i.spec} 实际版本 ${i.installedVersion} 与声明不符|shared uninstall-target ${i.target} "${i.spec}" --execute && shared install-target ${i.target} "${i.spec}" --execute`)}}catch{}})' 2>/dev/null)"
+  [ -n "$target_absent" ] && { issues+="$target_absent"$'\n'; ok=1; }
   if [ "$json" = 1 ]; then
     ROOT="$ROOT" LINK_DIR="$LINK_DIR" BIN_DIR="$BIN_DIR" PY_VENV="$PY_VENV" NPM_PREFIX="$NPM_PREFIX" CACHE_DIR="$CACHE_DIR" ISSUES="$issues" WARNINGS="$warnings" OK="$ok" VERSION="$VERSION" MEOW_HOME="$MEOW_HOME" MEOW_STATE="$MEOW_STATE" MNEMON_STATE="$MNEMON_STATE" MNEMON_VER="$MNEMON_VER" node -e 'const e=process.env;const issues=(e.ISSUES||"").split("\n").filter(Boolean).map(l=>{const i=l.indexOf("|");const j=l.indexOf("|",i+1);return i<0?{code:"UNKNOWN",message:l,fix:null}:{code:l.slice(0,i),message:l.slice(i+1,j<0?undefined:j),fix:j<0?null:l.slice(j+1)}});const warnings=(e.WARNINGS||"").split("\n").filter(Boolean);console.log(JSON.stringify({version:e.VERSION,ok:e.OK==="0",root:e.ROOT,linkDir:e.LINK_DIR,cliExists:require("node:fs").existsSync(e.BIN_DIR+"/shared"),pythonAvailable:require("node:fs").existsSync(e.PY_VENV+"/bin/python"),npmAvailable:!!require("node:child_process").spawnSync("npm",["--version"],{encoding:"utf8",timeout:3000}).stdout,memory:{meow:{bundled:true,home:e.MEOW_HOME,homeState:e.MEOW_STATE},mnemon:{cliInstalled:e.MNEMON_STATE==="present",version:e.MNEMON_VER||null}},issues,warnings},null,2))'
     return "$ok"
@@ -958,6 +991,8 @@ shared $VERSION — 共享库：工具 / 开发环境 / 技能
 
 落点治理
   mode [show|local|shared]  当前工作区的安装模式；local = 不做前置拦截
+  cases search|read|save|stats|archive|prune|pending
+                      排障案例：症状/环境/失败尝试/方案/证据；项目隔离，默认最近 1000 条内关键词排序
   memory [status|setup-mnemon]
                       记忆后端：meow-memory 随 bundle 挂载；setup-mnemon 把 mnemon CLI 装进共享 npm 环境
   adopt [目录] [--dry-run|--yes] [--class A|B|C]
@@ -976,9 +1011,31 @@ shared $VERSION — 共享库：工具 / 开发环境 / 技能
 EOF
 }
 
+cases_module() {
+  local base
+  base="$(dirname "$(readlink -f "$0")")"
+  if [ -f "$base/.shared-cases.mjs" ]; then printf '%s' "$base/.shared-cases.mjs"
+  else printf '%s' "$base/cases.mjs"; fi
+}
+
+target_module() {
+  local base
+  base="$(dirname "$(readlink -f "$0")")"
+  if [ -f "$base/.shared-targets.mjs" ]; then printf '%s' "$base/.shared-targets.mjs"
+  else printf '%s' "$base/targets.mjs"; fi
+}
+
 main() {
   local cmd="${1:-help}"; shift || true
   case "$cmd" in
+    uninstall-target) DSH_SHARED_ROOT="$ROOT" node "$(target_module)" uninstall "$@" ;;
+    cases) DSH_SHARED_ROOT="$ROOT" node "$(cases_module)" "$@" ;;
+    target-verify) DSH_SHARED_ROOT="$ROOT" node "$(target_module)" verify ;;
+    target-history) DSH_SHARED_ROOT="$ROOT" node "$(target_module)" history ;;
+    targets)
+      if [ "${1:-}" = "--summary" ]; then DSH_SHARED_ROOT="$ROOT" node "$(target_module)" summary
+      else DSH_SHARED_ROOT="$ROOT" node "$(target_module)" list "$@"; fi ;;
+    install-target) DSH_SHARED_ROOT="$ROOT" node "$(target_module)" install "$@" ;;
     status) cmd_status "$@" ;;
     list|ls) cmd_list "$@" ;;
     doctor) cmd_doctor "$@" ;;

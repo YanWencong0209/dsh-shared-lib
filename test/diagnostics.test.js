@@ -67,3 +67,60 @@ test('adopt writes a run manifest with item results', () => {
     rmSync(root, { recursive: true, force: true })
   }
 })
+
+test('status and doctor surface target matrix and case counts', () => {
+  const { root, linkDir } = setup()
+  try {
+    // A declared install that is not on disk must be visible in both status and doctor.
+    const runs = join(root, 'state', 'target-runs'); mkdirSync(runs, { recursive: true })
+    writeFileSync(join(runs, 'a.json'), JSON.stringify({ action: 'install', target: 'npm', spec: 'left-pad@1.3', state: 'succeeded', args: ['install', '-g', 'left-pad@1.3'], startedAt: '2026-01-01T00:00:00Z' }))
+    const status = JSON.parse(invoke(root, linkDir, ['status', '--json']).stdout)
+    assert.deepEqual(status.targets, { runs: 1, declared: 1 })
+    assert.ok('cases' in status)
+
+    const doctor = invoke(root, linkDir, ['doctor', '--json'])
+    assert.notEqual(doctor.status, 0)
+    const health = JSON.parse(doctor.stdout)
+    const absent = health.issues.filter(i => i.code === 'TARGET_ABSENT')
+    assert.equal(absent.length, 1, doctor.stdout)
+    assert.match(absent[0].message, /left-pad@1\.3/)
+    assert.match(absent[0].fix, /shared install-target npm "left-pad@1\.3" --execute/)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test('doctor reports version drift with a repair command', () => {
+  const { root, linkDir } = setup()
+  try {
+    const runs = join(root, 'state', 'target-runs'); mkdirSync(runs, { recursive: true })
+    writeFileSync(join(runs, 'a.json'), JSON.stringify({ action: 'install', target: 'npm', spec: 'left-pad@1.3.0', state: 'succeeded', args: ['install', '-g', 'left-pad@1.3.0'], startedAt: '2026-01-01T00:00:00Z' }))
+    const pkgDir = join(root, 'env/npm/lib/node_modules/left-pad')
+    mkdirSync(pkgDir, { recursive: true })
+    writeFileSync(join(pkgDir, 'package.json'), JSON.stringify({ name: 'left-pad', version: '1.3.1' }))
+    const doctor = invoke(root, linkDir, ['doctor', '--json'])
+    assert.notEqual(doctor.status, 0)
+    const drift = JSON.parse(doctor.stdout).issues.filter(i => i.code === 'TARGET_DRIFT')
+    assert.equal(drift.length, 1, doctor.stdout)
+    assert.match(drift[0].message, /1\.3\.1/)
+    assert.match(drift[0].fix, /uninstall-target npm "left-pad@1\.3\.0" --execute/)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test('doctor flags a running plugin older than the shipped CLI', () => {
+  const { root, linkDir } = setup()
+  try {
+    // Simulate "package updated on disk, process still running the previous module".
+    writeFileSync(join(root, 'state', 'runtime.json'), JSON.stringify({ version: '0.0.1-old', appliedAt: new Date().toISOString() }))
+    const doctor = invoke(root, linkDir, ['doctor', '--json'])
+    assert.notEqual(doctor.status, 0)
+    const stale = JSON.parse(doctor.stdout).issues.filter(i => i.code === 'PLUGIN_STALE')
+    assert.equal(stale.length, 1, doctor.stdout)
+    assert.match(stale[0].message, /0\.0\.1-old/)
+    assert.match(stale[0].fix, /重启 DSH/)
+
+    // Matching versions must not raise it.
+    const version = JSON.parse(readFileSync(new URL('../package.json', import.meta.url).pathname, 'utf8')).version
+    writeFileSync(join(root, 'state', 'runtime.json'), JSON.stringify({ version, appliedAt: new Date().toISOString() }))
+    const okDoctor = invoke(root, linkDir, ['doctor', '--json'])
+    assert.equal(JSON.parse(okDoctor.stdout).issues.filter(i => i.code === 'PLUGIN_STALE').length, 0)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
