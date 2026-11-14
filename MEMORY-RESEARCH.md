@@ -63,3 +63,11 @@ Verification: complete local Node suite 78/78 passed; new tests exercise output 
 `CaseStore.episodes(workspace, session)` folds at most 200 stored observations into at most ten failure episodes. It retains failureCall and laterReturnedCall references, never raw outputs. Only a later return of the same tool closes a temporal episode; unrelated tools do not. Status is `later-return-observed`, taskVerified remains false, and no solution is generated. This is a deterministic projection of stored events, not proof the same command was retried or the underlying issue was fixed. Both row-window and candidate truncation are explicit.
 
 Verification: 79/79 local tests passed. Episode test covers exact call references, unrelated-tool exclusion, project/session isolation and absence of fabricated solution fields. No additional model-facing schema or system-prompt text was added. Background model extraction and automatic context injection remain unimplemented.
+
+## Stage 3a: durable handoff at the turn boundary
+
+The inspected Host agent/turn-stopping serial event is used only to enqueue compact episode metadata; no steering or model request is sent. memory_jobs is deduplicated by workspace/session/latest observation row, capped at 1,000 jobs with 16 KB payloads. Jobs stay `awaiting-extractor`, and reopening the database preserves deduplication. automaticCapture:false also disables enqueueing. No worker lease, inference retry or route is claimed implemented yet.
+
+Host llm.stream and GenerateOptions were inspected: explicit provider/model, maxTokens and AbortSignal are available. Background extraction still requires evidence-content access plus strict model output validation; the current metadata intentionally cannot reconstruct a root cause or patch. Implementation must not fabricate a solution from tool names/error codes.
+
+Verification: full local suite 80/80. Queue test proves persistence, cursor deduplication, workspace filtering, payload ceiling on the fixture, and no promotion into cases. No live Host integration test or paid model call was run.

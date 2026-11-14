@@ -53,3 +53,21 @@ test('episodes preserve failure and later return references without inventing a 
   assert.equal(s.episodes('/a','other-session').candidates.length,0)
  }finally{s.close();rmSync(root,{recursive:true,force:true})}
 })
+
+test('turn queue is idempotent, bounded and does not call an extractor',()=>{
+ const root=mkdtempSync(join(tmpdir(),'auto-queue-'));let s=new CaseStore(root)
+ try {
+  assert.equal(s.enqueueEpisodes('/a','s').reason,'no-observations')
+  s.observe(exec,{isError:true},'/a')
+  const job=s.enqueueEpisodes('/a','s')
+  assert.equal(job.state,'awaiting-extractor')
+  assert.equal(s.enqueueEpisodes('/a','s').reason,'duplicate')
+  const row=s.db.prepare('SELECT * FROM memory_jobs WHERE id=?').get(job.id)
+  assert.ok(Buffer.byteLength(row.payload)<=16384)
+  assert.equal(JSON.parse(row.payload).candidates[0].taskVerified,false)
+  assert.equal(s.enqueueEpisodes('/other','s').queued,false)
+  s.close();s=new CaseStore(root)
+  assert.equal(s.enqueueEpisodes('/a','s').reason,'duplicate')
+  assert.equal(s.stats('/a').active,0)
+ }finally{s.close();rmSync(root,{recursive:true,force:true})}
+})
