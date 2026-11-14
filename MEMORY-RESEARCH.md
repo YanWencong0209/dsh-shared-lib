@@ -103,3 +103,7 @@ Full regression: 88/88 local tests; no upstream suites or live model calls run. 
 ## Delivery status and remaining integration
 
 Completed: pinned source comparison, no-prompt metadata capture, scoped episode projection, durable queue with deterministic summaries, explicit extraction/Host-stream/evidence adapter boundaries. These modules are NOT yet a complete automatic semantic memory pipeline. Missing: real Host evidence reader; asynchronous worker ownership/lease/retry; generated-candidate persistence and retrieval; live model cost/quality evaluation. Existing reflection from separately installed meow-memory is not disabled or changed by this branch. Therefore current deployment would not eliminate its reflection prompts. Keep this branch uninstalled until the remaining integration is implemented and reviewed.
+
+## Integration continuation: Host session evidence
+
+Inspected live sessions Service: get(id), Session.header.cwd, seq and snapshotEvents(from,to); tool/call.data.callId/name and tool/result.data.message.toolCallId/content. sessionEvidenceReader uses this exact shape, validates session/workspace, allowlists tool names and scans at most 1,000 event positions. It never reads tool arguments or arbitrary files; missing/oversized results stop extraction. Local suite 90/90 passed, with test Session objects. No live profile activation or inference call was performed.
