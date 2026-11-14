@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.2 — 目标矩阵进工具面
+
+- `shared_lib(action:"targets")`：一次返回管理器/来源/记忆目标规模、已声明安装的核验摘要、最近 5 条执行记录；只读，安装仍需 CLI `--execute`。
+- 报告在存在 absent 声明时退出码非零，但不阻断渲染（verify 的 1 与"命令失败"区分开）。
+
 ## 0.6.1 — 修复安装期激活失败
 
 - **移除** `cordis.patch.yml` 里的 meow-memory 行：`link:` 安装不会把被链接包的 dependencies 装进 profile，

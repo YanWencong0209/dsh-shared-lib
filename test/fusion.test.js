@@ -4,7 +4,7 @@
  * meow-memory 的 registry tarball 自带预构建 lib/，安装期不执行构建脚本。
  */
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -15,7 +15,7 @@ const cli = join(packageRoot, 'assets/shared.sh')
 
 test('fusion manifest pins both upstream memory packages', () => {
   const pkg = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8'))
-  assert.equal(pkg.version, '0.6.1')
+  assert.equal(pkg.version, '0.6.2')
   // Memory backends are installed as their own bundles, not as runtime deps:
   // link: installs do not install a linked package's dependencies into the profile.
   assert.equal(pkg.dependencies, undefined)
@@ -124,4 +124,32 @@ test('memoryReport separates declared config from runtime activation', async () 
   }, '/tmp/unused')
   assert.deepEqual(active.state.active, ['memory_remember', 'memory_search'])
   assert.match(active.text, /已注册 2 个/)
+})
+
+test('targetsReport summarises matrix, verification and recent runs without executing', async () => {
+  const { targetsReport } = await import(join(packageRoot, 'lib', 'bundle.js'))
+  const root = mkdtempSync(join(tmpdir(), 'targets-report-'))
+  try {
+    const bin = join(root, 'bin'); mkdirSync(bin, { recursive: true })
+    cpSync(join(packageRoot, 'assets', 'targets.mjs'), join(bin, '.shared-targets.mjs'))
+    const reports = join(root, 'state', 'target-runs'); mkdirSync(reports, { recursive: true })
+
+    // Empty history: nothing declared, nothing absent.
+    const empty = targetsReport(root)
+    assert.equal(empty.state.managers, 9)
+    assert.equal(empty.state.memory, 10)
+    assert.match(empty.text, /npm, pnpm, bun, uv-tool, pipx, cargo, go, conda, mise/)
+    assert.match(empty.text, /未实现：archive, source-build, container/)
+    assert.match(empty.text, /最近执行：无/)
+    assert.match(empty.text, /本工具只读/)
+    assert.equal(empty.exitCode, 0)
+
+    // Declared-but-missing install: rendered, summarised, and signalled.
+    writeFileSync(join(reports, 'r1.json'), JSON.stringify({ target: 'npm', state: 'succeeded', args: ['install', '-g', 'typescript@5'], startedAt: '2026-01-01T00:00:00Z', finishedAt: '2026-01-01T00:00:01Z' }))
+    const absent = targetsReport(root)
+    assert.match(absent.text, /typescript@5 → succeeded/)
+    assert.equal(absent.state.verified, 1)
+    assert.equal(absent.state.absent, 1)
+    assert.equal(absent.exitCode, 1, 'absent declared install must be non-zero')
+  } finally { rmSync(root, { recursive: true, force: true }) }
 })
