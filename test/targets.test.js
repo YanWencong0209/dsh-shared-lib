@@ -92,7 +92,8 @@ test('real child process receives isolated environment and writes durable succes
 test('verify proves presence from layout and never guesses success', async () => {
   const { verifyDeclared, packageOf } = await import('../assets/targets.mjs')
   assert.equal(packageOf('@scope/pkg@1.2.3'), '@scope/pkg')
-  assert.equal(packageOf('ruff==0.9'), 'ruff==0.9')
+  assert.equal(packageOf('ruff==0.9'), 'ruff', 'pip-style pin is stripped')
+  assert.equal(packageOf('pkg[extra]>=2'), 'pkg')
   const root = mkdtempSync(join(tmpdir(), 'target-verify-'))
   try {
     const runs = join(root, 'state', 'target-runs'); mkdirSync(runs, { recursive: true })
@@ -164,7 +165,7 @@ test('uninstall plans per manager and never invents a go uninstall', async () =>
   assert.equal(npm.action, 'uninstall')
   assert.equal(npm.package, 'left-pad', 'version selector must be stripped')
   assert.deepEqual(npm.args, ['uninstall', '--global', '--prefix', '/tmp/s/env/npm', 'left-pad'])
-  assert.deepEqual(planUninstall({ target: 'uv-tool', spec: 'ruff==0.9', root: '/tmp/s' }).args, ['tool', 'uninstall', 'ruff==0.9'])
+  assert.deepEqual(planUninstall({ target: 'uv-tool', spec: 'ruff==0.9', root: '/tmp/s' }).args, ['tool', 'uninstall', 'ruff'], 'uv wants the bare name')
   assert.deepEqual(planUninstall({ target: 'pipx', spec: 'ruff', root: '/tmp/s' }).args, ['uninstall', 'ruff'])
   assert.deepEqual(planUninstall({ target: 'cargo', spec: 'ripgrep', root: '/tmp/s' }).args, ['uninstall', '--root', '/tmp/s/env/cargo', 'ripgrep'])
   const pnpmUn = planUninstall({ target: 'pnpm', spec: 'left-pad@1.3.0', root: '/tmp/s' })
@@ -263,5 +264,42 @@ test('verify flags version drift instead of only presence', async () => {
     assert.equal(by['is-number@7.0.0'].installedVersion, '7.0.1')
     assert.equal(by['no-version-pkg'].matchesSpec, null, 'a versionless spec cannot be judged')
     assert.equal(report.drifted, 1)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test('uv-tool is probeable with version from dist-info metadata', async () => {
+  const { verifyDeclared, packageOf, planUninstall } = await import('../assets/targets.mjs')
+  assert.equal(packageOf('ruff==0.9.0'), 'ruff')
+  const root = mkdtempSync(join(tmpdir(), 'uv-probe-'))
+  try {
+    const runs = join(root, 'state', 'target-runs'); mkdirSync(runs, { recursive: true })
+    writeFileSync(join(runs, 'a.json'), JSON.stringify({ action: 'install', target: 'uv-tool', spec: 'ruff==0.9.0', state: 'succeeded', args: ['tool', 'install', 'ruff==0.9.0'], startedAt: '2026-01-01T00:00:00Z' }))
+    // Real layout observed 2026-11-14: env/uv-tools/<name>/lib/pythonX.Y/site-packages/<name>-<ver>.dist-info/METADATA
+    const dist = join(root, 'env/uv-tools/ruff/lib/python3.12/site-packages/ruff-0.9.0.dist-info')
+    mkdirSync(dist, { recursive: true })
+    writeFileSync(join(dist, 'METADATA'), 'Metadata-Version: 2.1\nName: ruff\nVersion: 0.9.0\n')
+    const hit = verifyDeclared(root).items[0]
+    assert.equal(hit.state, 'present')
+    assert.match(hit.evidence, /env\/uv-tools\/ruff$/)
+    assert.equal(hit.installedVersion, '0.9.0')
+    assert.equal(hit.matchesSpec, true)
+    assert.deepEqual(planUninstall({ target: 'uv-tool', spec: 'ruff==0.9.0', root: '/tmp/s' }).args, ['tool', 'uninstall', 'ruff'])
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test('shared get never links archive files as commands', () => {
+  const packageRoot = new URL('..', import.meta.url).pathname
+  const root = mkdtempSync(join(tmpdir(), 'get-archive-'))
+  try {
+    const bin = join(root, 'bin'), path = join(root, 'path')
+    mkdirSync(bin, { recursive: true }); mkdirSync(path, { recursive: true })
+    writeFileSync(join(bin, 'realtool'), '#!/bin/sh\n', { mode: 0o755 })
+    writeFileSync(join(bin, 'bundle.tar.gz'), 'x')
+    const run = spawnSync('bash', [join(packageRoot, 'assets', 'shared.sh'), 'link'], {
+      cwd: root, encoding: 'utf8', env: { ...process.env, DSH_SHARED_ROOT: root, SHARED_LINK_DIR: path, HOME: join(root, 'home') },
+    })
+    assert.equal(run.status, 0, run.stderr)
+    assert.equal(existsSync(join(path, 'realtool')), true)
+    assert.equal(existsSync(join(path, 'bundle.tar.gz')), false, 'archives must not be exposed as executables')
   } finally { rmSync(root, { recursive: true, force: true }) }
 })

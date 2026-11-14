@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.2 — uv-tool 真实冒烟与三处修复
+
+真跑 `uv 0.13.8`（经 `shared get` + 官方 sha256 校验，全程在临时根，未动用户共享库）暴露并修复：
+
+- `packageOf` 只懂 npm 的 `@版本`：`ruff==0.9.0` 原样返回，导致探测去找 `env/uv-tools/ruff==0.9.0`、卸载把带版本的串传给 uv。现同时剥离 `==`/`>=`/`~=`/`!=` 与 `[extra]`。
+- `verify` 只用 `package.json` 取版本，丢掉了 probe 从 dist-info 读到的结果 → Python 工具永远 `installedVersion: null`。现在探测结果优先。
+- `shared get` 会把下载的**压缩包**（如 `uv.tar.gz`）当命令链接进 PATH。`link` 现在跳过常见归档后缀。
+
+实测闭环：装 ruff==0.9.0 → `present` / `installedVersion 0.9.0` / `matchesSpec true` → 卸载 → 0 项；临时根已删除。
+
 ## 0.7.1 — 检测"已更新但未重启"
 
 这次踩的坑（进程跑旧模块、磁盘已新版，试了 4 轮才发现）现在由工具自动报出：

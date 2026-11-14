@@ -84,8 +84,14 @@ export function planInstall({ target, spec, scope = 'shared', root = process.env
 
 /** Package name without version/selector, e.g. @scope/pkg@1.2 -> @scope/pkg */
 export function packageOf(spec) {
-  const at = spec.indexOf('@', spec.startsWith('@') ? 1 : 0)
-  return at > 0 ? spec.slice(0, at) : spec
+  // npm: pkg@1.2.3 | scoped @scope/pkg@1 | pip: pkg==1.2.3 | pkg[extra]>=1 | bare pkg
+  let name = String(spec)
+  const op = name.search(/==|>=|<=|~=|!=|===/)
+  if (op > 0) name = name.slice(0, op)
+  const bracket = name.indexOf('[')
+  if (bracket > 0) name = name.slice(0, bracket)
+  const at = name.indexOf('@', name.startsWith('@') ? 1 : 0)
+  return at > 0 ? name.slice(0, at) : name
 }
 
 /**
@@ -109,7 +115,8 @@ export function verifyDeclared(root, { platform = process.platform, readInstallH
     const spec = r.spec ?? r.args?.filter(a => !String(a).startsWith('-')).at(-1) ?? ''
     const item = { target: r.target, spec, ...probe(root, r, platform) }
     const want = requestedVersion(spec)
-    const got = item.evidence && /package\.json$/.test(item.evidence) ? readVersion(item.evidence) : null
+    // probe may already know the version (uv via dist-info); otherwise read package.json.
+    const got = item.installedVersion ?? (item.evidence && /package\.json$/.test(item.evidence) ? readVersion(item.evidence) : null)
     return { ...item, requestedVersion: want, installedVersion: got,
       // null = cannot judge (range spec or layout without a readable version)
       matchesSpec: want && got ? want === got : null }
@@ -133,10 +140,33 @@ const readVersion = p => { try { const j = JSON.parse(readFileSync(p, 'utf8')); 
 
 /** Exact version requested by the spec, or null when the spec is a range/omitted. */
 const requestedVersion = spec => {
-  const at = String(spec).lastIndexOf('@')
+  const text = String(spec)
+  const pip = /===?\s*([0-9][0-9A-Za-z.+-]*)$/.exec(text)
+  if (pip) return pip[1]
+  const at = text.lastIndexOf('@')
   if (at <= 0) return null
-  const v = String(spec).slice(at + 1)
+  const v = text.slice(at + 1)
   return /^\d+\.\d+\.\d+(?:[-+].*)?$/.test(v) ? v : null
+}
+
+/** uv/pipx installs keep metadata in lib/pythonX.Y/site-packages/<name>-<ver>.dist-info/METADATA. */
+export const pythonInstalledVersion = (toolDir, pkgName) => {
+  try {
+    const lib = join(toolDir, 'lib')
+    const pythons = readdirSync(lib).filter(d => d.startsWith('python'))
+    for (const py of pythons) {
+      const site = join(lib, py, 'site-packages')
+      for (const entry of readdirSync(site)) {
+        if (!entry.endsWith('.dist-info')) continue
+        const meta = readFileSync(join(site, entry, 'METADATA'), 'utf8')
+        const m = /^Version:\s*(.+)$/m.exec(meta)
+        const name = /^Name:\s*(.+)$/m.exec(meta)
+        const norm = v => v.trim().toLowerCase().replace(/_/g, '-')
+        if (m && name && norm(name[1]) === norm(pkgName)) return m[1].trim()
+      }
+    }
+  } catch {}
+  return null
 }
 
 function probe(root, record, platform) {
@@ -160,7 +190,9 @@ function probe(root, record, platform) {
     }
     case 'uv-tool': {
       const p = join(root, 'env/uv-tools', pkg)
-      return has(p) ? { state: 'present', evidence: p } : { state: 'absent', evidence: p }
+      if (!has(p)) return { state: 'absent', evidence: p }
+      const version = pythonInstalledVersion(p, pkg)
+      return { state: 'present', evidence: p, installedVersion: version }
     }
     case 'pipx': {
       const p = join(root, 'env/pipx/venvs', pkg, 'pyvenv.cfg')

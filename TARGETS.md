@@ -75,7 +75,7 @@ npm/pnpm/bun/uv-tool/pipx/cargo/conda/mise each get their own uninstall argv in 
 shared target-verify          # JSON: present / absent / unverifiable, exit 1 if anything is absent
 ```
 
-Reads succeeded records from `<root>/state/target-runs/`, keeps the latest per target+spec, and probes only layouts this version knows: npm (`env/npm/**/node_modules/<pkg>/package.json`), pnpm (`env/pnpm/<pnpm-major>/node_modules/<pkg>/package.json`), uv-tool (`env/uv-tools/<pkg>`), pipx (`env/pipx/venvs/<pkg>/pyvenv.cfg`), cargo (`env/cargo/bin/<pkg or pkg with - → _>`), go (`bin/<last module segment>`). Everything else (bun, conda, mise, and cargo when the binary is named differently) reports `unverifiable` — the tool never reports presence it cannot prove. Failed runs are ignored. `present` proves a path exists with the expected layout, not that the package is the version you wanted; pin exact versions in the spec for that.
+Reads succeeded records from `<root>/state/target-runs/`, keeps the latest per target+spec, and probes only layouts this version knows: npm (`env/npm/**/node_modules/<pkg>/package.json`), pnpm (`env/pnpm/<pnpm-major>/node_modules/<pkg>/package.json`), uv-tool (`env/uv-tools/<name>` plus version from `lib/pythonX.Y/site-packages/<name>-<ver>.dist-info/METADATA`), pipx (`env/pipx/venvs/<pkg>/pyvenv.cfg`), cargo (`env/cargo/bin/<pkg or pkg with - → _>`), go (`bin/<last module segment>`). Everything else (bun, conda, mise, and cargo when the binary is named differently) reports `unverifiable` — the tool never reports presence it cannot prove. Failed runs are ignored. `present` proves a path exists with the expected layout, not that the package is the version you wanted; pin exact versions in the spec for that.
 
 ## Portability
 
@@ -116,3 +116,22 @@ Verified live on npm 11.17.0: install `left-pad@1.3.0` → `matches true`; editi
 ## Staleness detection (added 0.7.1)
 
 `apply` writes `<root>/state/runtime.json` with the version of the module this process actually imported. A process that was started before a package update keeps the old value, so `shared status` prints `CLI <version> / 运行中 <version>` and flags a mismatch, and `shared doctor` reports `PLUGIN_STALE` with "restart DSH". This exists because the 0.6.6→0.7.0 fixes were pushed and seeded while the live process kept answering from 0.6.5 for four rounds.
+
+## uv-tool specifics (real run, 2026-11-14)
+
+Bootstrapped `uv 0.13.8` through `shared get` with the release `.sha256` (checksum accepted), then exercised the adapter in a throwaway root so the user's shared library stayed untouched:
+
+```sh
+shared install-target uv-tool ruff==0.9.0 --execute   # uv tool install
+shared target-verify                                  # present, installedVersion 0.9.0, matchesSpec true
+shared uninstall-target uv-tool ruff==0.9.0 --execute # Uninstalled 1 executable: ruff
+shared target-verify                                  # 0 items
+```
+
+Three defects only real use exposed, all fixed:
+
+1. `packageOf('ruff==0.9.0')` returned the whole string, so the probe looked for `env/uv-tools/ruff==0.9.0` (absent) and `uv tool uninstall` received a version selector it rejects. It now strips `==`/`>=`/`~=`/extras as well as npm's `@`.
+2. `verify` computed the version only from `package.json`, discarding the probe's dist-info result → `installedVersion: null` for every Python tool. Probe-reported versions now win.
+3. `shared get` linked downloaded **archives** (`uv.tar.gz`) into the PATH directory as if they were commands. Archive extensions are now skipped by `link`.
+
+Version comparison for pip-style pins works end to end: `requestedVersion 0.9.0`, `installedVersion 0.9.0`, `matchesSpec true`.

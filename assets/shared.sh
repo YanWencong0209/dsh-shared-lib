@@ -18,7 +18,7 @@ HOOK_LOG="$LOG_DIR/hook.log"
 ADOPT_RUN_LOG=""
 MANIFEST="$STATE_DIR/tools.json"
 MANIFEST_SCHEMA=1
-VERSION="0.7.1"
+VERSION="0.7.2"
 
 die() { printf 'shared: %s\n' "$*" >&2; exit 1; }
 info() { printf '%s\n' "$*"; }
@@ -46,6 +46,9 @@ link_dir() {
     done
     [ "$skip" = 1 ] && continue
     [ -f "$src" ] || continue
+    case "$name" in
+      *.tar|*.tar.gz|*.tgz|*.tar.xz|*.txz|*.tar.bz2|*.zip|*.7z|*.gz|*.xz|*.bz2) continue ;;
+    esac
     chmod +x "$src" 2>/dev/null
     dst="$LINK_DIR/$name"
     if [ -L "$dst" ]; then
