@@ -147,6 +147,13 @@ shared uv|cargo|go ...      # 薄透传，工具没装明确报错（不静默�
 - 版本兼容实证：`meow-memory@0.32.7` CHANGELOG 记录其在 dsh 0.2.1-rc.2 真机端到端验证（本 profile 线 0.2.2-rc.1）；`dsh-mnemon@0.5.45` engines 要求 `dsh >=0.2.1-rc.1 <0.3.0-0`，与当前宿主一致；`node:sqlite` 在本机 Node 24 可用。
 - 状态探测：shell 侧 `shared memory status` / `shared status --json` / `shared doctor --json` 的 `memory` 字段（best-effort，含 legacy→共享数据家迁移注记）；模型侧 `shared_lib(action:"memory")` 直接读 Loader 条目，是脑子挂载真相（含 disabled）。mnemon CLI 缺失只算 warning。
 
+
+## 记忆数据家切换后的信任门（实测 2026-11-14）
+
+把 meow-memory 的全局数据家从 `~/.dsh-meow` 切到 `<root>/state/memory-home` 后，原本正常的工作区会被判为"未信任的外部记忆库"，全部 `memory_*` 调用被拒。原因：信任标记目录 `markersDir` 在插件 apply 时捕获，切换后仍指向旧路径，而旧目录已随迁移消失。
+
+恢复方式（任一）：用户在输入框执行 `/meow-trust`；或按同一算法在插件实际持有的 `markersDir` 写入标记：`trusted-workspaces/<sha256(路径小写、正斜杠、去尾斜杠)>.json`，内容 `{ "path": "<工作区>", "trustedAt": <毫秒>, "trustedSource": "meow-trust" }`。**重启插件后只需写新家**；切换数据家与重启一起做可以避免这个坑。
+
 ## 开发
 
 ```bash
