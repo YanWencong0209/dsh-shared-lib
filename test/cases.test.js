@@ -38,7 +38,8 @@ test('failure capture stores only metadata, deduplicates calls and stays session
     const result={isError:true,error:{message:'secret=abc',info:{code:'EXIT'}}}
     s.incident(exec,result);s.incident(exec,result)
     assert.equal(s.pending('s1').length,1);assert.equal(s.pending('s2').length,0)
-    assert.ok(!JSON.stringify(s.pending('s1')).includes('abc'))
+    assert.ok(!JSON.stringify(s.pending('s1')).includes('secret=abc'))
+    assert.deepEqual(Object.keys(s.pending('s1')[0]).sort(), ['call_id','code','created','id','tool'])
     assert.equal(s.search('EXIT','/work').matches.length,0)
     assert.equal(redact('token=abc ghp_ABCDEFG bearer xyz'),'token=[REDACTED] [REDACTED] bearer [REDACTED]')
   } finally{s.close();rmSync(root,{recursive:true,force:true})}

@@ -51,3 +51,9 @@ https://github.com/basicmachines-co/basic-memory
 https://github.com/getzep/graphiti
 https://github.com/letta-ai/letta-code
 https://github.com/thedotmack/claude-mem
+
+## Stage 1 implemented (development only)
+
+`CaseStore.observe` now records allowlisted outcome metadata at tools/result: failed/returned/unknown, session/call/workspace/tool and bounded symbolic error codes. It does not inspect arguments, value or content. Captures of memory_* and shared_cases are excluded. Duplicate session/call pairs are ignored. Capture stops at 10,000 observations rather than growing indefinitely. `automaticCapture:false` disables new observation capture; the existing failure incident feature remains separate. There is no background inference, turn-end prompt, automatic injection or verified-case promotion in this slice.
+
+Verification: complete local Node suite 78/78 passed; new tests exercise output getters that throw if accessed, opaque error-code rejection, persistence, duplicate calls and no case promotion. An existing privacy test was flaky because it searched for `abc` anywhere in random UUIDs; it now checks the actual secret marker and the metadata key set. Runtime profile was not changed. Remaining gaps: rotation/retention, efficient capacity accounting, concurrent capacity enforcement and trajectory consumption.
