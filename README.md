@@ -1,25 +1,19 @@
 # dsh-shared-lib
 
-v0.6.0（开发分支 `feature/target-matrix`）目标可核验、排障案例可复用；变更见 [CHANGELOG.md](CHANGELOG.md)。开发分支的新目标目录与安装计划入口见 [TARGETS.md](TARGETS.md)；问题与验证方案的复用入口见 [CASE-MEMORY.md](CASE-MEMORY.md)。
+当前 main 已发布 v0.7.5；后续自动记忆实验在 `feature/automatic-memory`，未合并、未安装。目标矩阵见 [TARGETS.md](TARGETS.md)，排障案例库见 [CASE-MEMORY.md](CASE-MEMORY.md)，自动记忆源码研究与验收计划见 [MEMORY-RESEARCH.md](MEMORY-RESEARCH.md)。
 
 跨工作区、跨会话共用的共享库：**工具 bin、开发环境、技能** 三样东西放一个目录里，
 外加一道前置 guard，拦住「`pip install` / `npm install -g` 装到系统、换个工作区就丢」这条最常见的坑。
 
-v0.5.x（开发分支 feature/target-matrix，未合并未安装）新增目标矩阵与排障案例：`shared targets`/`shared install-target`（默认仅出计划，--execute 才动上游管理器，每次执行留 JSON 记录）、`shared_cases` 排障案例库（详见 TARGETS.md 与 CASE-MEMORY.md）。
+v0.5–0.7.x 在 feature/target-matrix 已合并 main：目标矩阵/安装计划/核验卸载、`shared_cases` 案例生命周期和压缩提示。自动事件采集与后台记忆实验仅在 feature/automatic-memory，未合并。
 
 v0.4.x 起共享库工具面补齐「声明式清单 + 完整性 + 跨机复现」（借 flox/devbox/mise 的思路，纯 Node 内置实现，零新增运行时 import）：`shared get` 可选 `--sha256`/`--version` 并在通过后写入 `state/tools.json` 清单，`verify` 离线检测缺失/sha256 漂移，`export`/`import` 跨机复现工具，`outdated` 看没记版本的项，`uninstall` 一次删净 bin+软链+清单，另加 `uv/cargo/go` 薄透传（缺失即明确报错，不静默）。`doctor --json` 的 issues 现在是 `{code,message,fix}` 对象，直接给出可执行修复命令（basic-memory doctor 风格）。
 
-v0.3.x 起融合两套上游记忆系统（见文末「记忆后端」，分工=shared-lib 是手、记忆是脑子）：meow-memory 七层 SQLite 跨会话记忆随 bundle 自动挂载且数据家收进 `<root>/state/memory-home`，dsh-mnemon 记忆空间作为可选独立 bundle。共享库本体（工具 / 环境 / 技能 / guard）不新增运行时 import，只用 Node 内置模块；记忆后端作为 `dependencies` 随 bundle 带入 profile。
+架构分工是 shared-lib=手（管理）/ memory plugin=脑子。**当前 main 与此开发分支都不自动挂载 meow-memory 或 dsh-mnemon**：需单独安装各自 bundle；不要声明为 link 包的依赖（pnpm link 不会把它们的依赖装进 profile）。meow 数据家可由其 `homeDir` 指向 `<root>/state/memory-home`。
 
 ## 装
 
-这个运行时里 bundle 必须是「一个可被 `plugin_manager` 挂载的目录」，压缩包不能直接导入。三步：
-
-```bash
-# 候选包需由用户明确确认后，再通过 Harness 插件管理器安装。
-# 当前目录安装目标：/root/dsh-shared-lib-audit/dsh-shared-lib
-# 安装/升级后按 Harness 返回的 application 和 warnings 核验生效状态。
-```
+当前 main 使用 `plugin_manager install_bundle` 安装。自动记忆改动仍在 `feature/automatic-memory`：未安装、未合并，不能作为当前插件能力使用。
 
 装完自检：
 
@@ -162,3 +156,8 @@ node --test test/*.test.js   # commands/interceptor=拦截规则，hardening/dia
 
 改代码后已安装的 profile 需要按 Harness 返回状态决定是否重启；不要通过改入口名规避模块缓存。
 `lib/index.js` 是兼容入口，实现放在 `lib/bundle.js`，`main` / `exports` / `cordis.entry` 指向实现文件。
+
+
+### 自动排障记忆（开发分支 feature/automatic-memory）
+
+`tools/result` 元数据 → 回合末候选轨迹/SQLite 队列 → 可选 Host stream 提取 → 有来源的候选摘要。提取默认关闭，需同时配置 `automaticProvider` + `automaticModel` 并提供工具白名单；不会自动发起模型请求，也不会把候选标成已验证修复。详见 `MEMORY-RESEARCH.md`。当前分支尚未安装到 profile。
