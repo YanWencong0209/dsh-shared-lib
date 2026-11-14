@@ -33,6 +33,23 @@ Read license headers: Graphiti and extracted Claude-mem LICENSE are Apache-2.0. 
 4. Retrieval: compact identity-first candidates, project scoping, relevance threshold, duplicate suppression and hard byte/token budgets. No automatic injection until current Host logging/injection contracts are verified. Existing meow and case injection must not duplicate each other.
 5. Verified promotion: source-linked evidence, user/model-reported versus mechanically observed status; automatic summaries never become verified fixes without a real oracle. Compare saved tokens against capture/extraction/retrieval overhead on repeat-task fixtures.
 
+## Current implementation plan and goals
+
+| Stage | Goal | Status |
+|---|---|---|
+| A | Pin local references and record code-level findings | Done; see fixed SHAs and source ranges above |
+| B | Capture bounded tool outcome metadata, no prompt or raw output | Done; source events are idempotent |
+| C | Derive source-linked failure episodes and enqueue per turn | Done; bounded, scoped, cursor-deduplicated |
+| D | Read only allowlisted recorded result text with workspace/session checks | Done as Host session adapter; live profile test still required |
+| E | Explicit, bounded Host LLM stream adapter with citations | Done as adapter; provider/model must be explicitly configured |
+| F | Lease/retry queue, persist candidates, return short scoped summaries | Done locally; worker is serialized at turn boundary |
+| G | Connect Host lifecycle; teardown awaits worker | Done in development branch; simulated Host test, not live verification |
+| H | Token/cost/quality measurement on repeated-task fixtures | Pending; need a benchmark with and without retrieval and actual usage accounting; no live provider run |
+| I | Verify reference licenses and record checkout completeness | Licenses read from all five pinned HEADs: Mem0 Apache-2.0, Basic Memory AGPL-3.0, Graphiti/Letta Code/Claude-mem Apache-2.0. Basic Memory/Graphiti working trees complete; selected files and LICENSE blobs for Mem0/Letta/Claude-mem extracted via git show. Their working trees remain partial; no code copied |
+| J | Final package metadata, README/CHANGELOG, security review, 0.8.0 candidate | Pending |
+
+Hard gates: no generated candidate may be marked verified solely because a tool returned normally; real Host lifecycle tests and provider usage measurements must be clearly distinguished from local mocks. No runtime install or main merge without explicit user approval.
+
 ## Acceptance criteria
 
 - No growth in existing promptText or tool schema budgets.
@@ -100,9 +117,9 @@ lib/evidence.js reads only a validated allowlist of 1–10 source IDs through an
 
 Full regression: 88/88 local tests; no upstream suites or live model calls run. Runtime profile and main unchanged.
 
-## Delivery status and remaining integration
+## Delivery status at the time of this note
 
-Completed: pinned source comparison, no-prompt metadata capture, scoped episode projection, durable queue with deterministic summaries, explicit extraction/Host-stream/evidence adapter boundaries. These modules are NOT yet a complete automatic semantic memory pipeline. Missing: real Host evidence reader; asynchronous worker ownership/lease/retry; generated-candidate persistence and retrieval; live model cost/quality evaluation. Existing reflection from separately installed meow-memory is not disabled or changed by this branch. Therefore current deployment would not eliminate its reflection prompts. Keep this branch uninstalled until the remaining integration is implemented and reviewed.
+The following continuation sections supersede this snapshot. At this point the pipeline was incomplete; later rounds added Host session evidence, a leased queue worker, candidate persistence/retrieval and a Host turn-stopping hook. Remaining gates are tracked in the current plan below; do not use this historical snapshot as current status.
 
 ## Integration continuation: Host session evidence
 
@@ -110,6 +127,22 @@ Inspected live sessions Service: get(id), Session.header.cwd, seq and snapshotEv
 
 ## Integrated leased worker (development)
 
-runMemoryJob connects hydration, validated extraction, candidate persistence and scoped candidate retrieval. claimExtraction uses one atomic UPDATE RETURNING with a 35s lease, stale-lease fencing and at most three attempts. failExtraction stores a fixed failure category rather than raw model/provider errors. Candidate rows remain in memory_jobs and do not enter verified cases. candidateSummaries returns at most three 180-character snippets from the current workspace's latest 100 candidates.
+runMemoryJob connects hydration, validated extraction, candidate persistence and scoped candidate retrieval. claimExtraction uses one atomic UPDATE RETURNING with a 35s lease, stale-lease fencing and at most three attempts. failExtraction stores a fixed failure category rather than raw model/provider errors. Candidate rows remain in memory_jobs and do not enter verified cases. candidateSummaries returns at most three 180-character snippets from the current workspace's latest 100 candidates. It is currently an internal store method, not a registered model tool or automatic prompt injection; a user-facing read action remains pending.
 
 Full local suite 92/92 passed. Tests cover failed tool → queue → explicit evidence/extractor → persistence → search, stale lease rejection and retry exhaustion. This is an injected integration test, not a live Host or model test. Still needed before final delivery: plugin-owned async scheduling/drain and teardown; CLI discovery/read for candidates; docs/config verification and cost fixture. Runtime profile/main untouched.
+
+## Stage 3g: Host lifecycle integration (opt-in)
+
+apply listens to the verified serial `agent/turn-stopping` event. It enqueues and performs bounded local summary, then runs at most one leased extraction for the same workspace/session. Extraction is disabled unless both `automaticProvider` and `automaticModel` are explicitly set; there is no default/free route and no primary-agent message. `automaticTools` is an explicit allowlist for recorded tool results. The worker is serialized and the plugin effect awaits it before closing SQLite.
+
+The Host adapter uses `ctx.get('llm').stream` and `ctx.get('sessions')`; session evidence checks header.cwd and resolves exact tool/call/result references, scans at most 1,000 event positions, and reads text only. The injected Host test verifies default-off and explicit route behavior, one candidate persisted, and awaited teardown. Full local suite 94/94.
+
+No real model request was sent. Provider cost depends on the explicitly selected route. `maxTokens=256` is a request budget, not measured billing evidence. Existing meow-memory reflection remains independently active if that plugin is installed; this development plugin does not disable or replace it.
+
+## Current verification (0.8.0 development)
+
+- Failure retry backoff: 1s, 2s, capped at 60s; third failure becomes terminal. Persist only `EXTRACTION_FAILED`, not provider error text.
+- Added concurrent turn-stop test: shared queue lease permits one model call; plugin teardown waits before closing SQLite.
+- `node --test --test-concurrency=1 test/*.test.js`: **95/95 passed**. A parallel test-runner process stalled in cases CLI subprocess; the isolated cases test passed and the complete serial run passed.
+- Version synchronization: package.json and seeded `assets/shared.sh` both `0.8.0`.
+- Remaining: no live provider usage/cost/quality measurement and no live installed-Host lifecycle run. Do not claim production readiness or that independently installed meow-memory reflection is replaced.

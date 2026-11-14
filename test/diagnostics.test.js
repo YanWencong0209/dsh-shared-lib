@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { readFileSync as readText } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import test from 'node:test'
 
-const cli = new URL('../assets/shared.sh', import.meta.url).pathname
+const packageRoot = new URL('..', import.meta.url).pathname
+const cli = join(packageRoot, 'assets/shared.sh')
 
 function setup() {
   const root = mkdtempSync(join(tmpdir(), 'shared-diag-'))
@@ -118,9 +120,13 @@ test('doctor flags a running plugin older than the shipped CLI', () => {
     assert.match(stale[0].fix, /重启 DSH/)
 
     // Matching versions must not raise it.
-    const version = JSON.parse(readFileSync(new URL('../package.json', import.meta.url).pathname, 'utf8')).version
+    const version = JSON.parse(readText(join(packageRoot, 'package.json'), 'utf8')).version
+    const cliVersion = /^VERSION=\"([^\"]+)\"/m.exec(readText(cli, 'utf8'))?.[1]
+    assert.equal(cliVersion, version, 'package.json and seeded CLI version must stay synchronized')
     writeFileSync(join(root, 'state', 'runtime.json'), JSON.stringify({ version, appliedAt: new Date().toISOString() }))
+    // Install a self-link so unrelated PATH occupancy does not affect doctor status.
+    symlinkSync(join(root, 'bin', 'shared'), join(linkDir, 'shared'))
     const okDoctor = invoke(root, linkDir, ['doctor', '--json'])
-    assert.equal(JSON.parse(okDoctor.stdout).issues.filter(i => i.code === 'PLUGIN_STALE').length, 0)
+    assert.equal(JSON.parse(okDoctor.stdout).issues.filter(i => i.code === 'PLUGIN_STALE').length, 0, 'matching runtime stamp must clear only the staleness issue')
   } finally { rmSync(root, { recursive: true, force: true }) }
 })

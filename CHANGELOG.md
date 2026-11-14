@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.0 — 自动排障记忆（实验性，未安装）
+
+- `tools/result` 自动记录受限元数据，按 workspace/session/call 去重；默认不读参数与原始输出。
+- 回合结束生成有来源的失败轨迹并持久化排队，带 16KB 载荷、1,000 任务、200 观察和 3 次提取尝试上限。
+- 可选 Host LLM worker：只有同时配置 `automaticProvider` 与 `automaticModel` 才运行；工具白名单、证据来源 ID、摘要/输入/响应预算和租约校验均强制执行。
+- 候选摘要最多返回当前工作区 3 条×180 字符，永远保持 `candidate`/`taskVerified:false`，不自动晋升为 verified case。
+- 全部能力仍在 `feature/automatic-memory`，未安装到 profile，未合并 main；94/94 测试通过。
+- 参考源码与验收清单见 `MEMORY-RESEARCH.md`。
+
+
 ## 0.7.5 — 压缩常驻提示与工具描述
 
 这些文本每次请求都发一遍，之前明显过长：

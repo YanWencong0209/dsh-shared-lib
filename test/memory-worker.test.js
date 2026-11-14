@@ -26,9 +26,18 @@ test('three failures stop retries and stale leases cannot publish',async()=>{
   const current=store.claimExtraction('/p','s',40000)
   assert.ok(current)
   assert.equal(store.finishExtraction(old.id,old.lease,{summary:'x',status:'candidate',taskVerified:false}),false)
-  store.failExtraction(current.id,current.lease)
-  await runMemoryJob({store,workspace:'/p',session:'s',read:async()=>{throw Error('not available')}})
-  assert.equal(store.claimExtraction('/p','s'),null)
+  store.failExtraction(current.id,current.lease,'EXTRACTION_FAILED',40000)
+  const blocked=await runMemoryJob({store,workspace:'/p',session:'s',now:40000,read:async()=>{throw Error('not available')}})
+  assert.equal(blocked.reason,'no-job','backoff prevents immediate retry')
+  let job=store.db.prepare('SELECT * FROM memory_jobs').get()
+  assert.equal(job.failure,'EXTRACTION_FAILED','raw provider errors are not persisted')
+  for(const now of [42000,46000]) {
+    const claim=store.claimExtraction('/p','s',now);assert.ok(claim)
+    store.failExtraction(claim.id,claim.lease,'EXTRACTION_FAILED',now)
+    job=store.db.prepare('SELECT * FROM memory_jobs').get()
+    if(job.state==='failed')break
+  }
   assert.equal(store.db.prepare('SELECT state FROM memory_jobs').get().state,'failed')
+  assert.equal(store.claimExtraction('/p','s',Date.now()+120000),null)
  }finally{store.close();rmSync(root,{recursive:true,force:true})}
 })

@@ -18,7 +18,7 @@ HOOK_LOG="$LOG_DIR/hook.log"
 ADOPT_RUN_LOG=""
 MANIFEST="$STATE_DIR/tools.json"
 MANIFEST_SCHEMA=1
-VERSION="0.7.5"
+VERSION="0.8.0"
 
 die() { printf 'shared: %s\n' "$*" >&2; exit 1; }
 info() { printf '%s\n' "$*"; }
