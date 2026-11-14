@@ -31,7 +31,7 @@ shared doctor --json   # 机器可读诊断和退出状态
 shared list --json     # 工具、技能、Node/Python 清单
 shared memory status   # 记忆后端探测（meow-memory / mnemon）
 shared verify          # 清单完整性离线校验（missing/corrupt 非零退出）
-node --test test/*.test.js   # 72 项回归测试
+node --test test/*.test.js   # 74 项回归测试
 ```
 
 ## 目录

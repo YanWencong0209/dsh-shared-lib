@@ -11,11 +11,13 @@ import { spawnSync } from 'node:child_process'
 import test from 'node:test'
 
 const packageRoot = new URL('..', import.meta.url).pathname
+// Loaded once so the prompt budget test can inspect the shipped text.
+const promptPure = await import(join(packageRoot, 'lib', 'bundle.js'))
 const cli = join(packageRoot, 'assets/shared.sh')
 
 test('fusion manifest pins both upstream memory packages', () => {
   const pkg = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8'))
-  assert.equal(pkg.version, '0.7.3')
+  assert.equal(pkg.version, '0.7.5')
   // Memory backends are installed as their own bundles, not as runtime deps:
   // link: installs do not install a linked package's dependencies into the profile.
   assert.equal(pkg.dependencies, undefined)
@@ -193,4 +195,30 @@ test('shared_cases forwards every action its schema advertises', async () => {
     }
     assert.equal(tool.parameters.properties.action.enum.includes('stats'), true)
   } finally { try { store?.close() } catch {} ; rmSync(root, { recursive: true, force: true }) }
+})
+
+test('injected prompt stays small and keeps the essentials', () => {
+  const { promptText } = promptPure
+  const text = promptText('/root/shared', '/usr/local/bin', { intercept: true })
+  // Budget: this text is paid on every single request.
+  assert.ok(text.length < 520, `prompt must stay under 520 chars, got ${text.length}`)
+  for (const must of ['shared get', 'shared npm', 'shared pip', 'shared doctor', 'SKILL.md', 'shared_cases search', 'SHARED_BYPASS']) {
+    assert.ok(text.includes(must), `prompt lost essential: ${must}`)
+  }
+  assert.ok(text.split('\n').length <= 8, 'prompt should stay at most 8 lines')
+})
+
+test('tool schemas stay within their token budget', async () => {
+  const { defineSharedTool } = promptPure
+  const { caseTool } = await import(join(packageRoot, 'lib', 'cases.js'))
+  const lib = defineSharedTool('/root/shared', { get: () => undefined })
+  // These strings are sent with every request; keep them terse and put detail in skills.
+  assert.ok(lib.description.length < 220, `shared_lib description ${lib.description.length} chars`)
+  assert.ok(lib.parameters.properties.action.description.length < 200, 'shared_lib action description too long')
+
+  const cases = caseTool({}, () => '/w')
+  assert.ok(cases.description.length < 160, `shared_cases description ${cases.description.length} chars`)
+  const six = ['title', 'problem', 'environment', 'attempts', 'solution', 'evidence']
+    .reduce((n, k) => n + cases.parameters.properties[k].description.length, 0)
+  assert.ok(six < 220, `six save-field descriptions total ${six} chars`)
 })

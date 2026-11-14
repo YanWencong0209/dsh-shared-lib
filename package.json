@@ -1,7 +1,7 @@
 {
   "name": "dsh-shared-lib",
   "description": "共享库：跨工作区/跨会话共用的工具 bin、开发环境、技能目录；融合 meow-memory 七层记忆与 mnemon 记忆空间（可选）",
-  "version": "0.7.3",
+  "version": "0.7.5",
   "type": "module",
   "main": "lib/bundle.js",
   "cordis": {
