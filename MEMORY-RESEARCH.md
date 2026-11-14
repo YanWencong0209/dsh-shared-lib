@@ -77,3 +77,9 @@ Verification: full local suite 80/80. Queue test proves persistence, cursor dedu
 At a turn boundary, after enqueueing, a local worker consumes at most one pending job and writes a compact `metadata-summary` (8 KB ceiling), retaining source call IDs and `taskVerified:false`. State becomes `summarized-metadata`, not a verified case. The work is synchronous and short, under a SQLite transaction; an interrupted transaction rolls back. It is not an async LLM worker and has no network/token cost. `automaticSummary:false` disables consumption. Full suite 81/81; tests prove one-time consumption, reopening state, source preservation and no case promotion.
 
 Outstanding: content hydration with consent/filters, async model extraction with budgets, scoped summary retrieval, live Host tests, upstream license completion. No prompt injection or inference was enabled.
+
+## Stage 3c: scope and duplicate controls
+
+Episode enqueue now rejects identical payloads in the same workspace/session even when unrelated later calls advance the observation cursor. Queue consumption accepts workspace/session so one turn cannot consume another workspace's job. `awaiting-extractor` jobs remain local metadata summaries; no prompt, provider call or case promotion is introduced.
+
+Verification: 82/82 tests. Added regression coverage for unrelated success not requeueing old failures and caller scope isolation. All edits remain on feature/automatic-memory; no runtime profile changes.

@@ -90,3 +90,15 @@ test('local summary consumes queued jobs once without generating a fix or prompt
   assert.equal(s.stats('/a').active,0)
  }finally{s.close();rmSync(root,{recursive:true,force:true})}
 })
+
+test('unrelated successful calls do not requeue old failures; consumer respects caller scope',()=>{
+ const root=mkdtempSync(join(tmpdir(),'auto-scope-'));const s=new CaseStore(root)
+ try {
+  s.observe(exec,{isError:true},'/a');s.enqueueEpisodes('/a','s')
+  s.observe({...exec,callId:'unrelated',name:'read'},{isError:false},'/a')
+  assert.equal(s.enqueueEpisodes('/a','s').reason,'unchanged-episodes')
+  assert.equal(s.summarizeNext('/b','s').processed,false)
+  assert.equal(s.summarizeNext('/a','other').processed,false)
+  assert.equal(s.summarizeNext('/a','s').processed,true)
+ }finally{s.close();rmSync(root,{recursive:true,force:true})}
+})
