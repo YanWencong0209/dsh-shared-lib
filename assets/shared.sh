@@ -18,7 +18,7 @@ HOOK_LOG="$LOG_DIR/hook.log"
 ADOPT_RUN_LOG=""
 MANIFEST="$STATE_DIR/tools.json"
 MANIFEST_SCHEMA=1
-VERSION="0.4.0"
+VERSION="0.5.0"
 
 die() { printf 'shared: %s\n' "$*" >&2; exit 1; }
 info() { printf '%s\n' "$*"; }
@@ -176,18 +176,6 @@ cmd_uninstall() {
   [ -e "$bin" ] || [ -L "$link" ] || die "没有登记的工具：$name（bin 和软链都不存在）"
   if [ -L "$link" ]; then rm -f "$link" && info "移除软链 $link" || die "移除软链失败：$link"; fi
   if [ -e "$bin" ]; then rm -f "$bin" && info "移除 bin 文件 $bin" || die "移除 bin 失败：$bin"; fi
-  manifest_delete "$name"
-  info "已卸载 $name 并从清单移除"
-}
-
-cmd_uninstall() {
-  local name="${1:-}"
-  [ -n "$name" ] || die "用法：shared uninstall <名字>"
-  case "$name" in .|..|*[!A-Za-z0-9._-]*) die "非法名字：$name" ;; esac
-  local bin="$BIN_DIR/$name" link="$LINK_DIR/$name"
-  [ -e "$bin" ] || [ -L "$link" ] || die "没有登记的工具：$name（bin 和软链都不存在）"
-  [ -L "$link" ] && { rm -f "$link" && info "移除软链 $link" || die "移除软链失败：$link"; }
-  [ -e "$bin" ] && { rm -f "$bin" && info "移除 bin 文件 $bin" || die "移除 bin 失败：$bin"; }
   manifest_delete "$name"
   info "已卸载 $name 并从清单移除"
 }
@@ -703,7 +691,7 @@ cmd_memory() {
   case "$sub" in
     status)
       info "记忆后端（best-effort 探测，不代表插件运行时状态）"
-      info "  meow-memory   已随 bundle 挂载（脑子）；数据家 $MEOW_HOME（$MEOW_STATE）$MEOW_MIGRATE_NOTE；记忆库本体按工作区 .dsh-meow/memory.db 隔离"
+      info "  meow-memory   随包声明（激活未验证）；数据家 $MEOW_HOME（$MEOW_STATE）$MEOW_MIGRATE_NOTE；记忆库本体按工作区 .dsh-meow/memory.db 隔离"
       if [ "$MNEMON_STATE" = present ]; then
         info "  mnemon CLI    $MNEMON_VER（可选；Memory Spaces 的 Mnemon Native provider 需要）"
       else
@@ -782,7 +770,7 @@ cmd_status() {
   info "拦截     $deny 次，其中模型改用 shared 命令 $corrected 次"
   local mem_mnemon
   if [ "$MNEMON_STATE" = present ]; then mem_mnemon="已装（$MNEMON_VER）"; else mem_mnemon="未装（可选：shared memory setup-mnemon）"; fi
-  info "记忆     meow-memory 已挂载（$MEOW_HOME：$MEOW_STATE$MEOW_MIGRATE_NOTE）；mnemon CLI $mem_mnemon"
+  info "记忆     meow-memory 随包声明（$MEOW_HOME：$MEOW_STATE$MEOW_MIGRATE_NOTE）；mnemon CLI $mem_mnemon"
 
   local issues
   issues="$(_health_issues)"
@@ -976,9 +964,19 @@ shared $VERSION — 共享库：工具 / 开发环境 / 技能
 EOF
 }
 
+target_module() {
+  local base
+  base="$(dirname "$(readlink -f "$0")")"
+  if [ -f "$base/.shared-targets.mjs" ]; then printf '%s' "$base/.shared-targets.mjs"
+  else printf '%s' "$base/targets.mjs"; fi
+}
+
 main() {
   local cmd="${1:-help}"; shift || true
   case "$cmd" in
+    target-history) DSH_SHARED_ROOT="$ROOT" node "$(target_module)" history ;;
+    targets) DSH_SHARED_ROOT="$ROOT" node "$(target_module)" list "$@" ;;
+    install-target) DSH_SHARED_ROOT="$ROOT" node "$(target_module)" install "$@" ;;
     status) cmd_status "$@" ;;
     list|ls) cmd_list "$@" ;;
     doctor) cmd_doctor "$@" ;;

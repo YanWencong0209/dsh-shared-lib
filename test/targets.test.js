@@ -1,0 +1,90 @@
+import assert from 'node:assert/strict'
+import test from 'node:test'
+import { mkdtempSync, rmSync, existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { spawnSync } from 'node:child_process'
+import { catalog, planInstall, executePlan } from '../assets/targets.mjs'
+
+test('catalog separates configured memory from verified activation and unsupported sources', () => {
+  const c = catalog()
+  assert.equal(c.managers.length, 9)
+  assert.equal(c.memory.length, 10)
+  assert.ok(c.memory.every(x => x.activationVerified === false))
+  assert.equal(c.sources.find(x => x.id === 'archive').status, 'not-implemented')
+})
+test('all adapters construct argv and isolate shared destinations', () => {
+  for (const target of catalog().managers) {
+    const p = planInstall({ target: target.id, spec: target.id === 'go' ? 'example.com/tool@v1' : 'tool@1', root: '/tmp/shared' })
+    assert.equal(p.command, target.executable)
+    assert.ok(p.args.includes(target.id === 'go' ? 'example.com/tool@v1' : 'tool@1'))
+    assert.ok(Object.values(p.env).every(value => value.startsWith('/tmp/shared')))
+  }
+})
+test('scopes and identifiers fail explicitly; shell metacharacters stay one argument', () => {
+  assert.throws(() => planInstall({ target: 'npm', spec: '-g' }))
+  assert.throws(() => planInstall({ target: 'go', spec: 'example.com/tool' }))
+  assert.throws(() => planInstall({ target: 'npm', spec: 'x', scope: 'project' }))
+  assert.throws(() => planInstall({ target: 'mise', spec: 'node@24', platform: 'unknown' }))
+  assert.equal(planInstall({ target: 'npm', spec: 'x;touch-pwn' }).args.at(-1), 'x;touch-pwn')
+  assert.deepEqual(planInstall({ target: 'mise', spec: 'node@24', scope: 'project' }).args, ['use', 'node@24'])
+})
+test('execution probes first, preserves failures, never uses shell', () => {
+  const root = mkdtempSync(join(tmpdir(), 'target-exec-'))
+  try {
+    const plan = planInstall({ target: 'uv-tool', spec: 'ruff==0.1', root })
+    assert.throws(() => executePlan(plan, { spawn: () => ({ status: 127 }) }), /unavailable/)
+    assert.equal(existsSync(join(root, 'bin')), false)
+    const calls = []
+    const status = executePlan(plan, { spawn: (cmd, argv, options) => { calls.push({cmd, argv, options}); return {status: calls.length === 1 ? 0 : 7} } })
+    assert.equal(status, 7)
+    const runs = join(root, 'state', 'target-runs')
+    const records = readdirSync(runs).map(name => JSON.parse(readFileSync(join(runs, name), 'utf8')))
+    assert.equal(records.length, 1)
+    assert.equal(records[0].state, 'failed')
+    assert.equal(records[0].exitCode, 7)
+    assert.ok(records[0].finishedAt)
+    assert.ok(calls.every(x => x.options.shell === false))
+    assert.equal(calls[1].options.env.UV_TOOL_BIN_DIR, join(root, 'bin'))
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+test('legacy CLI delegates with root and defaults to plan only', () => {
+  const root = mkdtempSync(join(tmpdir(), 'target-cli-'))
+  try {
+    const r = spawnSync('bash', ['assets/shared.sh', 'install-target', 'pipx', 'ruff==0.1'], { encoding: 'utf8', env: {...process.env, DSH_SHARED_ROOT: root} })
+    assert.equal(r.status, 0, r.stderr)
+    const p = JSON.parse(r.stdout)
+    assert.equal(p.executed, false)
+    assert.equal(p.root, root)
+    assert.equal(existsSync(join(root, 'bin')), false)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+
+test('deployed CLI finds its hidden target module', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'target-seed-'))
+  try {
+    const { init } = await import('../lib/bundle.js')
+    init(root, join(root, 'path'))
+    const r = spawnSync(join(root, 'bin', 'shared'), ['targets'], { encoding: 'utf8', env: {...process.env, DSH_SHARED_ROOT: root} })
+    assert.equal(r.status, 0, r.stderr)
+    assert.equal(JSON.parse(r.stdout).managers.length, 9)
+    assert.equal(existsSync(join(root, 'path', '.shared-targets.mjs')), false)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+
+test('real child process receives isolated environment and writes durable success history', () => {
+  const root = mkdtempSync(join(tmpdir(), 'target-child-'))
+  try {
+    const tools = join(root, 'upstream'); mkdirSync(tools)
+    const executable = join(tools, 'go')
+    writeFileSync(executable, '#!/bin/sh\nif [ "$1" = "--version" ]; then echo fixture; exit 0; fi\nprintf "%s" "$GOBIN" > "$GOBIN/observed"\n', {mode:0o755})
+    const plan = planInstall({target:'go', spec:'example.com/tool@v1', root})
+    assert.equal(executePlan(plan, {inheritedEnv:{...process.env, PATH:tools+':'+process.env.PATH}}),0)
+    assert.equal(readFileSync(join(root,'bin','observed'),'utf8'),join(root,'bin'))
+    const records = readdirSync(join(root,'state','target-runs'))
+    assert.equal(records.length,1)
+    assert.equal(JSON.parse(readFileSync(join(root,'state','target-runs',records[0]),'utf8')).state,'succeeded')
+  } finally {rmSync(root,{recursive:true,force:true})}
+})
