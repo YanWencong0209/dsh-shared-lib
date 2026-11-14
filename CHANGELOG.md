@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.9 — 版本漂移检测
+
+- `target-verify` 在能读到版本时给出 `requestedVersion` / `installedVersion` / `matchesSpec`（范围版本或布局无版本时为 `null`），并统计 `drifted`。
+- `shared doctor` 把 `matchesSpec:false` 报为 `TARGET_DRIFT`，附「卸载 + 重装」修复命令。
+- 实测（npm 11.17.0）：装 `left-pad@1.3.0` → `matches true`；把已装 `package.json` 改成 `1.3.1` → `drifted:1` 且 doctor 输出修复命令；卸载后 verify 归零。
+- `targets --summary` 增加 drifted 计数。
+
 ## 0.6.8 — 紧凑目标视图与安装边界记录
 
 - 新增 `shared targets --summary`（约 0.5 KB，对比完整 JSON 约 5 KB）：管理器/来源/未实现项/声明安装计数/最近三次执行。

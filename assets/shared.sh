@@ -18,7 +18,7 @@ HOOK_LOG="$LOG_DIR/hook.log"
 ADOPT_RUN_LOG=""
 MANIFEST="$STATE_DIR/tools.json"
 MANIFEST_SCHEMA=1
-VERSION="0.6.8"
+VERSION="0.6.9"
 
 die() { printf 'shared: %s\n' "$*" >&2; exit 1; }
 info() { printf '%s\n' "$*"; }
@@ -932,7 +932,7 @@ cmd_doctor() {
   [ -n "$health" ] && { issues+="$health"$'\n'; ok=1; }
   # Declared target installs that the filesystem cannot prove must surface as fixable issues.
   local target_absent
-  target_absent="$(node "$(target_module)" verify 2>/dev/null | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{const j=JSON.parse(d);for(const i of j.items)if(i.state==="absent")console.log(`TARGET_ABSENT|${i.target} ${i.spec} 已声明但磁盘上找不到|shared install-target ${i.target} "${i.spec}" --execute`)}catch{}})' 2>/dev/null)"
+  target_absent="$(node "$(target_module)" verify 2>/dev/null | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{const j=JSON.parse(d);for(const i of j.items){if(i.state==="absent")console.log(`TARGET_ABSENT|${i.target} ${i.spec} 已声明但磁盘上找不到|shared install-target ${i.target} "${i.spec}" --execute`);else if(i.matchesSpec===false)console.log(`TARGET_DRIFT|${i.target} ${i.spec} 实际版本 ${i.installedVersion} 与声明不符|shared uninstall-target ${i.target} "${i.spec}" --execute && shared install-target ${i.target} "${i.spec}" --execute`)}}catch{}})' 2>/dev/null)"
   [ -n "$target_absent" ] && { issues+="$target_absent"$'\n'; ok=1; }
   if [ "$json" = 1 ]; then
     ROOT="$ROOT" LINK_DIR="$LINK_DIR" BIN_DIR="$BIN_DIR" PY_VENV="$PY_VENV" NPM_PREFIX="$NPM_PREFIX" CACHE_DIR="$CACHE_DIR" ISSUES="$issues" WARNINGS="$warnings" OK="$ok" VERSION="$VERSION" MEOW_HOME="$MEOW_HOME" MEOW_STATE="$MEOW_STATE" MNEMON_STATE="$MNEMON_STATE" MNEMON_VER="$MNEMON_VER" node -e 'const e=process.env;const issues=(e.ISSUES||"").split("\n").filter(Boolean).map(l=>{const i=l.indexOf("|");const j=l.indexOf("|",i+1);return i<0?{code:"UNKNOWN",message:l,fix:null}:{code:l.slice(0,i),message:l.slice(i+1,j<0?undefined:j),fix:j<0?null:l.slice(j+1)}});const warnings=(e.WARNINGS||"").split("\n").filter(Boolean);console.log(JSON.stringify({version:e.VERSION,ok:e.OK==="0",root:e.ROOT,linkDir:e.LINK_DIR,cliExists:require("node:fs").existsSync(e.BIN_DIR+"/shared"),pythonAvailable:require("node:fs").existsSync(e.PY_VENV+"/bin/python"),npmAvailable:!!require("node:child_process").spawnSync("npm",["--version"],{encoding:"utf8",timeout:3000}).stdout,memory:{meow:{bundled:true,home:e.MEOW_HOME,homeState:e.MEOW_STATE},mnemon:{cliInstalled:e.MNEMON_STATE==="present",version:e.MNEMON_VER||null}},issues,warnings},null,2))'

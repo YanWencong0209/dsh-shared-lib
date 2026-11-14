@@ -105,10 +105,19 @@ export function verifyDeclared(root, { platform = process.platform, readInstallH
     if (r.state === 'uninstalled') latest.delete(key)
     else latest.set(key, r)
   }
-  const items = [...latest.values()].map(r => ({ target: r.target, spec: r.spec ?? r.args?.filter(a => !String(a).startsWith('-')).at(-1) ?? '', ...probe(root, r, platform) }))
+  const items = [...latest.values()].map(r => {
+    const spec = r.spec ?? r.args?.filter(a => !String(a).startsWith('-')).at(-1) ?? ''
+    const item = { target: r.target, spec, ...probe(root, r, platform) }
+    const want = requestedVersion(spec)
+    const got = item.evidence && /package\.json$/.test(item.evidence) ? readVersion(item.evidence) : null
+    return { ...item, requestedVersion: want, installedVersion: got,
+      // null = cannot judge (range spec or layout without a readable version)
+      matchesSpec: want && got ? want === got : null }
+  })
   return { schema: 1, root, platform, items,
     absent: items.filter(i => i.state === 'absent').length,
-    unverifiable: items.filter(i => i.state === 'unverifiable').length }
+    unverifiable: items.filter(i => i.state === 'unverifiable').length,
+    drifted: items.filter(i => i.matchesSpec === false).length }
 }
 
 function readRunRecords(root) {
@@ -119,6 +128,16 @@ function readRunRecords(root) {
 }
 
 const has = p => { try { return existsSync(p) } catch { return false } }
+
+const readVersion = p => { try { const j = JSON.parse(readFileSync(p, 'utf8')); return typeof j.version === 'string' ? j.version : null } catch { return null } }
+
+/** Exact version requested by the spec, or null when the spec is a range/omitted. */
+const requestedVersion = spec => {
+  const at = String(spec).lastIndexOf('@')
+  if (at <= 0) return null
+  const v = String(spec).slice(at + 1)
+  return /^\d+\.\d+\.\d+(?:[-+].*)?$/.test(v) ? v : null
+}
 
 function probe(root, record, platform) {
   const pkg = packageOf(record.args?.at(-1) ?? '')
@@ -238,7 +257,7 @@ export function summaryText(root, platform = process.platform) {
     `managers(${cat.managers.length}): ${managers}  (* = unsupported on ${platform})`,
     `sources: ${cat.sources.filter(x => x.status !== 'not-implemented').map(x => x.id).join(', ')} | unimplemented: ${unimplemented}`,
     `memory targets: ${cat.memory.length} (configuration only, not verified activation)`,
-    `declared installs: ${verify.items.length} | absent: ${verify.absent} | unverifiable: ${verify.unverifiable}`,
+    `declared installs: ${verify.items.length} | absent: ${verify.absent} | drifted: ${verify.drifted ?? 0} | unverifiable: ${verify.unverifiable}`,
     ...Object.entries(live).map(([k, v]) => `  ${k} → ${v}`),
     recent.length ? `recent: ${recent.join(' ; ')}` : 'recent: none',
   ].join('\n')

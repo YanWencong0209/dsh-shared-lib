@@ -243,3 +243,25 @@ test('summary is a compact, accurate one-screen view', async () => {
     assert.ok(JSON.stringify((await import('../assets/targets.mjs')).catalog()).length > 2000)
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
+
+test('verify flags version drift instead of only presence', async () => {
+  const { verifyDeclared } = await import('../assets/targets.mjs')
+  const root = mkdtempSync(join(tmpdir(), 'target-drift-'))
+  try {
+    const runs = join(root, 'state', 'target-runs'); mkdirSync(runs, { recursive: true })
+    const rec = (name, spec) => writeFileSync(join(runs, `${name}.json`), JSON.stringify({ action: 'install', target: 'npm', spec, state: 'succeeded', args: ['install', '-g', spec], startedAt: '2026-01-01T00:00:00Z' }))
+    rec('a', 'left-pad@1.3.0'); rec('b', 'is-number@7.0.0'); rec('c', 'no-version-pkg')
+    for (const [name, version] of [['left-pad', '1.3.0'], ['is-number', '7.0.1'], ['no-version-pkg', '1.0.0']]) {
+      const dir = join(root, 'env/npm/lib/node_modules', name); mkdirSync(dir, { recursive: true })
+      writeFileSync(join(dir, 'package.json'), JSON.stringify({ name, version }))
+    }
+    const report = verifyDeclared(root)
+    const by = Object.fromEntries(report.items.map(i => [i.spec, i]))
+    assert.equal(by['left-pad@1.3.0'].matchesSpec, true)
+    assert.equal(by['left-pad@1.3.0'].installedVersion, '1.3.0')
+    assert.equal(by['is-number@7.0.0'].matchesSpec, false, 'silent upgrade must be visible')
+    assert.equal(by['is-number@7.0.0'].installedVersion, '7.0.1')
+    assert.equal(by['no-version-pkg'].matchesSpec, null, 'a versionless spec cannot be judged')
+    assert.equal(report.drifted, 1)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})

@@ -98,6 +98,12 @@ Two problems only a real install exposes:
 
 Real cycle verified through `shared`: install `left-pad@1.3.0` → `target-verify` `present` (`env/pnpm/5/node_modules/left-pad/package.json`) → `uninstall-target --execute` → verify 0 items, `bin/` clean, store kept under `env/pnpm/store`. An inconsistent store (e.g. deleting it behind pnpm's back) makes both add and remove fail — wipe `env/pnpm` and reinstall rather than patching the store.
 
+## Version drift, not just presence
+
+`present` only proves the path exists. When the spec pins an exact version (`pkg@1.2.3`), `target-verify` also reads the installed `package.json` version and reports `requestedVersion`, `installedVersion` and `matchesSpec` (`true`/`false`/`null` when the spec is a range or the layout exposes no version). `shared doctor` turns `matchesSpec:false` into a `TARGET_DRIFT` issue with an uninstall+reinstall fix command.
+
+Verified live on npm 11.17.0: install `left-pad@1.3.0` → `matches true`; editing the installed `package.json` to `1.3.1` → `drifted: 1` and doctor printed the repair command. After uninstalling, `target-verify` returned 0 items.
+
 ## Reading the matrix cheaply
 
 `shared targets` prints the full catalog JSON (~5 KB). `shared targets --summary` prints one screen (~0.5 KB): manager list, wired sources, unimplemented sources, declared-install counts and the last three runs. Use `--summary` when you only need to know what is supported; reach for the full JSON (or `shared target-verify`) only when you need per-item evidence paths.

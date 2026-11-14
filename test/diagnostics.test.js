@@ -87,3 +87,20 @@ test('status and doctor surface target matrix and case counts', () => {
     assert.match(absent[0].fix, /shared install-target npm "left-pad@1\.3" --execute/)
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
+
+test('doctor reports version drift with a repair command', () => {
+  const { root, linkDir } = setup()
+  try {
+    const runs = join(root, 'state', 'target-runs'); mkdirSync(runs, { recursive: true })
+    writeFileSync(join(runs, 'a.json'), JSON.stringify({ action: 'install', target: 'npm', spec: 'left-pad@1.3.0', state: 'succeeded', args: ['install', '-g', 'left-pad@1.3.0'], startedAt: '2026-01-01T00:00:00Z' }))
+    const pkgDir = join(root, 'env/npm/lib/node_modules/left-pad')
+    mkdirSync(pkgDir, { recursive: true })
+    writeFileSync(join(pkgDir, 'package.json'), JSON.stringify({ name: 'left-pad', version: '1.3.1' }))
+    const doctor = invoke(root, linkDir, ['doctor', '--json'])
+    assert.notEqual(doctor.status, 0)
+    const drift = JSON.parse(doctor.stdout).issues.filter(i => i.code === 'TARGET_DRIFT')
+    assert.equal(drift.length, 1, doctor.stdout)
+    assert.match(drift[0].message, /1\.3\.1/)
+    assert.match(drift[0].fix, /uninstall-target npm "left-pad@1\.3\.0" --execute/)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
