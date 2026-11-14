@@ -54,7 +54,7 @@ test('memory home prefers configured over legacy', () => {
   }
 })
 
-test('memoryReport reads Loader entries for mount truth', async () => {
+test('memoryReport reads Loader entries and reports disabled entries', async () => {
   const { memoryReport } = await import(join(packageRoot, 'lib', 'bundle.js'))
   const ctx = {
     get: name => name === 'configEditor'
@@ -65,7 +65,7 @@ test('memoryReport reads Loader entries for mount truth', async () => {
   assert.equal(report.exitCode, 0)
   assert.match(report.text, /meow-memory/)
   assert.match(report.text, /mnemon（已禁用）/)
-  assert.match(report.text, /Loader/)
+  assert.deepEqual(report.state.declared, ['meow-memory', 'mnemon（已禁用）'])
 })
 
 test('status/doctor JSON expose memory backends', () => {
@@ -98,4 +98,28 @@ test('status/doctor JSON expose memory backends', () => {
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
+})
+
+test('memoryReport separates declared config from runtime activation', async () => {
+  const { memoryReport } = await import(join(packageRoot, 'lib', 'bundle.js'))
+  const base = {
+    get: name => name === 'configEditor'
+      ? { entries: () => [{ options: { id: 'meow-memory' }, disabled: false }] }
+      : undefined,
+  }
+  const inactive = memoryReport(base, '/tmp/unused')
+  assert.deepEqual(inactive.state.declared, ['meow-memory'])
+  assert.deepEqual(inactive.state.active, [])
+  assert.match(inactive.text, /未检测到 memory_\* 工具/)
+  assert.match(inactive.text, /结论只看 active/)
+
+  const active = memoryReport({
+    get: name => name === 'configEditor'
+      ? { entries: () => [{ options: { id: 'meow-memory' }, disabled: false }] }
+      : name === 'tools'
+        ? { schemas: () => [{ name: 'memory_remember' }, { name: 'memory_search' }, { name: 'bash' }] }
+        : undefined,
+  }, '/tmp/unused')
+  assert.deepEqual(active.state.active, ['memory_remember', 'memory_search'])
+  assert.match(active.text, /已注册 2 个/)
 })

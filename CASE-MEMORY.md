@@ -1,5 +1,8 @@
 # 排障经验记忆
 
+> 记忆状态口径：`shared_lib(action:"memory")` 分三层报告——**declared**（configEditor 里有配置条目）、**active**（本 Agent 实际能看到 `memory_*` 工具，才证明插件已生效）、**data**（`state/memory-home` 有文件，只说明历史写入过）。只有 active 能当作"脑子在跑"。
+
+
 `shared_cases` 将排障结果沉淀为可检索案例，补充 meow-memory 的长期记忆与 mnemon 的记忆空间。数据保存在 `<root>/state/cases/cases.sqlite`（Node SQLite，WAL）。当前未安装至真实 profile。
 
 ## 工作方式
