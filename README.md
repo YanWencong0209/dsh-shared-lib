@@ -1,6 +1,6 @@
 # dsh-shared-lib
 
-开发分支的新目标目录与安装计划入口见 [TARGETS.md](TARGETS.md)；问题与验证方案的复用入口见 [CASE-MEMORY.md](CASE-MEMORY.md)。
+v0.6.0（开发分支 `feature/target-matrix`）目标可核验、排障案例可复用；变更见 [CHANGELOG.md](CHANGELOG.md)。开发分支的新目标目录与安装计划入口见 [TARGETS.md](TARGETS.md)；问题与验证方案的复用入口见 [CASE-MEMORY.md](CASE-MEMORY.md)。
 
 跨工作区、跨会话共用的共享库：**工具 bin、开发环境、技能** 三样东西放一个目录里，
 外加一道前置 guard，拦住「`pip install` / `npm install -g` 装到系统、换个工作区就丢」这条最常见的坑。

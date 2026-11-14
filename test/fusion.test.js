@@ -15,7 +15,7 @@ const cli = join(packageRoot, 'assets/shared.sh')
 
 test('fusion manifest pins both upstream memory packages', () => {
   const pkg = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8'))
-  assert.equal(pkg.version, '0.5.0')
+  assert.equal(pkg.version, '0.6.0')
   assert.equal(pkg.dependencies['meow-memory'], '0.32.7')
   assert.equal(pkg.dependencies['dsh-mnemon'], '0.5.45')
 })
