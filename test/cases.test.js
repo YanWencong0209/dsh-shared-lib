@@ -52,3 +52,33 @@ test('tool follows search-read-save contract',async()=>{
     assert.equal((await tool.execute({action:'read',id:saved.id},exec)).case.validation,'model-reported')
   }finally{s.close();rmSync(root,{recursive:true,force:true})}
 })
+
+test('archive hides a case from search/read and stats report counts only', () => {
+  const root = mkdtempSync(join(tmpdir(), 'case-archive-')); const s = new CaseStore(root)
+  try {
+    const a = s.save(sample, '/work')
+    s.save({ ...sample, scope: 'shared' }, '/work')
+    assert.deepEqual(s.stats('/work'), { active: 2, archived: 0, sharedActive: 1, projectActive: 1 })
+    assert.deepEqual(s.archive(a.id, '/work'), { archived: true, id: a.id })
+    assert.equal(s.search('sqlite', '/work').matches.some(m => m.id === a.id), false)
+    assert.equal(s.read(a.id, '/work'), null)
+    assert.deepEqual(s.stats('/work'), { active: 1, archived: 1, sharedActive: 1, projectActive: 0 })
+    // Project cases are isolated: another workspace can neither read nor archive them.
+    const other = s.save({ ...sample, title: 'SQLite other', problem: 'SQLite locked in other' }, '/other')
+    assert.deepEqual(s.archive(other.id, '/work'), { archived: false, reason: 'not-found' })
+    // Shared cases are visible everywhere by design, so archiving one from any workspace is expected.
+    const shared = s.search('sqlite', '/other').matches.find(m => m.id !== other.id)
+    assert.deepEqual(s.archive(shared.id, '/other'), { archived: true, id: shared.id })
+  } finally { s.close(); rmSync(root, { recursive: true, force: true }) }
+})
+
+test('existing databases migrate additively without losing cases', () => {
+  const root = mkdtempSync(join(tmpdir(), 'case-migrate-'))
+  try {
+    const first = new CaseStore(root); const saved = first.save(sample, '/work'); first.close()
+    const again = new CaseStore(root)
+    assert.equal(again.read(saved.id, '/work').solution, sample.solution)
+    assert.deepEqual(again.stats('/work'), { active: 1, archived: 0, sharedActive: 0, projectActive: 1 })
+    again.close()
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})

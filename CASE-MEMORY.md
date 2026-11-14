@@ -10,7 +10,12 @@
 4. 修复并实际验证后，用 `save` 写入 title、problem、environment、attempts、solution、evidence 六个字段。默认 project 范围；没有项目私密内容且确实通用时才使用 shared。
 5. `pending` 读取当前会话自动捕获的失败工具元数据。插件只监听 tools/result 的 isError=true，不把普通非零退出值猜成工具失败；后者需要主动整理。
 
-证据字段是模型填写的验证报告，不是插件独立验证。界面返回 validation=model-reported。没有证据的记录拒绝保存，自动失败事件也不会进入方案搜索。案例保存后是不可变记录，修正可保存新案例；当前不支持归档/更新、过期判定、删除或失败事件与案例自动关联。
+证据字段是模型填写的验证报告，不是插件独立验证。界面返回 validation=model-reported。没有证据的记录拒绝保存，自动失败事件也不会进入方案搜索。案例保存后内容不可变，修正可保存新案例。
+
+- `archive`：软删除，保留审计痕迹；归档后不再出现在 `search`/`read`。项目案例只能由所属工作区归档；`shared` 案例按设计对所有工作区可见，因此任何工作区都能归档它——这是全局变更，非本项目的通用案例不要随意归档。
+- `stats`：只返回计数（active/archived/sharedActive/projectActive），不返回正文。
+- 旧库通过 additive migration 自动补 `archived` 列，不丢案例。
+- 仍未实现：定时过期、失败事件与案例自动关联、案例正文编辑。
 
 ## 数据与输出边界
 
