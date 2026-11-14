@@ -195,8 +195,10 @@ function probe(root, record, platform) {
       return { state: 'present', evidence: p, installedVersion: version }
     }
     case 'pipx': {
-      const p = join(root, 'env/pipx/venvs', pkg, 'pyvenv.cfg')
-      return has(p) ? { state: 'present', evidence: p } : { state: 'absent', evidence: p }
+      const venv = join(root, 'env/pipx/venvs', pkg)
+      const p = join(venv, 'pyvenv.cfg')
+      if (!has(p)) return { state: 'absent', evidence: p }
+      return { state: 'present', evidence: p, installedVersion: pythonInstalledVersion(venv, pkg) }
     }
     case 'cargo': {
       let names = []
@@ -252,11 +254,13 @@ export function executePlan(plan, { spawn = spawnSync, inheritedEnv = process.en
   const env = { ...inheritedEnv, ...plan.env, PATH: [...plan.pathEntries, inheritedEnv.PATH || ''].join(delimiter) }
   const probe = spawn(plan.command, ['--version'], { cwd: plan.cwd, env, encoding: 'utf8', shell: false, timeout: 5000 })
   if (probe.error || probe.status !== 0) throw new Error(`Target executable unavailable: ${plan.command}: ${probe.error?.message || probe.stderr || probe.status}`)
+  // Provenance: which upstream CLI version ran this, so a later failure can be attributed.
+  const commandVersion = String(probe.stdout ?? '').trim().split('\n')[0].slice(0, 120) || null
   for (const dir of plan.directories) mkdirSync(dir, { recursive: true })
   const runs = join(plan.root, 'state', 'target-runs')
   mkdirSync(runs, { recursive: true })
   const file = join(runs, `${randomUUID()}.json`)
-  const record = { schema: 1, action: plan.action || 'install', target: plan.target, scope: plan.scope, spec: plan.spec, cwd: plan.cwd, command: plan.command, args: plan.args, startedAt: new Date().toISOString(), state: 'running' }
+  const record = { schema: 1, action: plan.action || 'install', target: plan.target, scope: plan.scope, spec: plan.spec, cwd: plan.cwd, command: plan.command, commandVersion, args: plan.args, startedAt: new Date().toISOString(), state: 'running' }
   writeFileSync(file, JSON.stringify(record, null, 2), { flag: 'wx', mode: 0o600 })
   try {
     const result = spawn(plan.command, plan.args, { cwd: plan.cwd, env, stdio: 'inherit', shell: false })

@@ -303,3 +303,35 @@ test('shared get never links archive files as commands', () => {
     assert.equal(existsSync(join(path, 'bundle.tar.gz')), false, 'archives must not be exposed as executables')
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
+
+test('execution records the upstream CLI version as provenance', () => {
+  const root = mkdtempSync(join(tmpdir(), 'target-prov-'))
+  try {
+    const tools = join(root, 'upstream'); mkdirSync(tools)
+    const exe = join(tools, 'go')
+    writeFileSync(exe, '#!/bin/sh\nif [ "$1" = "--version" ]; then echo "go version go1.24.0 linux/arm64"; exit 0; fi\nexit 0\n', { mode: 0o755 })
+    const plan = planInstall({ target: 'go', spec: 'example.com/tool@v1', root })
+    executePlan(plan, { inheritedEnv: { ...process.env, PATH: tools + ':' + process.env.PATH } })
+    const runs = readdirSync(join(root, 'state', 'target-runs'))
+    const record = JSON.parse(readFileSync(join(root, 'state', 'target-runs', runs[0]), 'utf8'))
+    assert.match(record.commandVersion, /^go version go1\.24\.0/)
+    assert.equal(record.state, 'succeeded')
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test('pipx reports the installed version from the venv metadata', async () => {
+  const { verifyDeclared } = await import('../assets/targets.mjs')
+  const root = mkdtempSync(join(tmpdir(), 'pipx-probe-'))
+  try {
+    const runs = join(root, 'state', 'target-runs'); mkdirSync(runs, { recursive: true })
+    writeFileSync(join(runs, 'a.json'), JSON.stringify({ action: 'install', target: 'pipx', spec: 'black==24.1.0', state: 'succeeded', args: ['install', 'black==24.1.0'], startedAt: '2026-01-01T00:00:00Z' }))
+    const venv = join(root, 'env/pipx/venvs/black')
+    mkdirSync(join(venv, 'lib/python3.12/site-packages/black-24.1.0.dist-info'), { recursive: true })
+    writeFileSync(join(venv, 'pyvenv.cfg'), 'version = 3.12.0\n')
+    writeFileSync(join(venv, 'lib/python3.12/site-packages/black-24.1.0.dist-info/METADATA'), 'Name: black\nVersion: 24.1.0\n')
+    const hit = verifyDeclared(root).items[0]
+    assert.equal(hit.state, 'present')
+    assert.equal(hit.installedVersion, '24.1.0')
+    assert.equal(hit.matchesSpec, true)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})

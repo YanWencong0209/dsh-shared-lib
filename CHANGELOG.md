@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.3 — 执行溯源与 pipx 版本
+
+- 每条执行记录新增 `commandVersion`：真正执行本次安装/卸载的上游 CLI 版本（如 `npm 11.17.0`、`go version go1.24.0`），便于把后续失败归因到工具链变化。
+- pipx 由"只判存在"升级为可读版本：从 venv 的 `dist-info/METADATA` 取，与 uv 共用同一 helper。
+- 测试：注入假 `go` 二进制验证 `commandVersion` 落盘；临时 venv 布局验证 pipx `installedVersion 24.1.0` / `matchesSpec true`。
+
 ## 0.7.2 — uv-tool 真实冒烟与三处修复
 
 真跑 `uv 0.13.8`（经 `shared get` + 官方 sha256 校验，全程在临时根，未动用户共享库）暴露并修复：

@@ -56,7 +56,7 @@ Node planner/executor has no Bash dependency. Linux execution contracts and CLI 
 
 ## Execution history
 
-`shared target-history` (or `node assets/targets.mjs history`) reads independent JSON records in `<root>/state/target-runs/`. Each executed install records its target, scope, argv, workspace, start/end times, outcome and exit status. Preflight failure makes no install record or destination directories. A process killed before completion leaves a `running` record, which means interrupted/unknown, never success. The history is an audit log, not proof that a package remains installed. No credentials or inherited environment are saved.
+`shared target-history` (or `node assets/targets.mjs history`) reads independent JSON records in `<root>/state/target-runs/`. Each executed install records its target, scope, argv, workspace, start/end times, outcome, exit status and `commandVersion` — the upstream CLI that actually ran it (e.g. `go version go1.24.0 linux/arm64`, `npm 11.17.0`), so a later failure can be attributed to a toolchain change. pipx installs now report their version from the venv's `dist-info/METADATA`, the same helper uv uses. Preflight failure makes no install record or destination directories. A process killed before completion leaves a `running` record, which means interrupted/unknown, never success. The history is an audit log, not proof that a package remains installed. No credentials or inherited environment are saved.
 
 ## Removing a declared install
 
