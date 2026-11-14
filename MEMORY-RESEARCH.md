@@ -83,3 +83,9 @@ Outstanding: content hydration with consent/filters, async model extraction with
 Episode enqueue now rejects identical payloads in the same workspace/session even when unrelated later calls advance the observation cursor. Queue consumption accepts workspace/session so one turn cannot consume another workspace's job. `awaiting-extractor` jobs remain local metadata summaries; no prompt, provider call or case promotion is introduced.
 
 Verification: 82/82 tests. Added regression coverage for unrelated success not requeueing old failures and caller scope isolation. All edits remain on feature/automatic-memory; no runtime profile changes.
+
+## Stage 3d: opt-in extractor validation boundary
+
+lib/extraction.js accepts only an explicitly supplied extractor and evidence list; no route is discovered or called automatically. Bounds: 1–10 unique evidence IDs, 2,000 chars per item, 8 KB total input, requested maxTokens 256, 1 KB summary output, timeout 1–30,000 ms. Rejects unknown output fields and fabricated source IDs. Output is always candidate/taskVerified:false/trustedInstructions:false. It does not persist or inject generated text.
+
+Full local suite 85/85. Cancellation/timeout tests prove caller waiting ends; underlying inference must honor AbortSignal—an uncooperative supplied function cannot be forcibly terminated by this boundary. maxTokens is a request to the extractor, not independently measured provider usage. Live provider execution, sanitized evidence hydration and Host-owned async draining remain not implemented. These are required before enabling automatic semantic extraction.
