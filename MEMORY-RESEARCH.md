@@ -107,3 +107,9 @@ Completed: pinned source comparison, no-prompt metadata capture, scoped episode 
 ## Integration continuation: Host session evidence
 
 Inspected live sessions Service: get(id), Session.header.cwd, seq and snapshotEvents(from,to); tool/call.data.callId/name and tool/result.data.message.toolCallId/content. sessionEvidenceReader uses this exact shape, validates session/workspace, allowlists tool names and scans at most 1,000 event positions. It never reads tool arguments or arbitrary files; missing/oversized results stop extraction. Local suite 90/90 passed, with test Session objects. No live profile activation or inference call was performed.
+
+## Integrated leased worker (development)
+
+runMemoryJob connects hydration, validated extraction, candidate persistence and scoped candidate retrieval. claimExtraction uses one atomic UPDATE RETURNING with a 35s lease, stale-lease fencing and at most three attempts. failExtraction stores a fixed failure category rather than raw model/provider errors. Candidate rows remain in memory_jobs and do not enter verified cases. candidateSummaries returns at most three 180-character snippets from the current workspace's latest 100 candidates.
+
+Full local suite 92/92 passed. Tests cover failed tool → queue → explicit evidence/extractor → persistence → search, stale lease rejection and retry exhaustion. This is an injected integration test, not a live Host or model test. Still needed before final delivery: plugin-owned async scheduling/drain and teardown; CLI discovery/read for candidates; docs/config verification and cost fixture. Runtime profile/main untouched.
