@@ -71,3 +71,9 @@ The inspected Host agent/turn-stopping serial event is used only to enqueue comp
 Host llm.stream and GenerateOptions were inspected: explicit provider/model, maxTokens and AbortSignal are available. Background extraction still requires evidence-content access plus strict model output validation; the current metadata intentionally cannot reconstruct a root cause or patch. Implementation must not fabricate a solution from tool names/error codes.
 
 Verification: full local suite 80/80. Queue test proves persistence, cursor deduplication, workspace filtering, payload ceiling on the fixture, and no promotion into cases. No live Host integration test or paid model call was run.
+
+## Stage 3b: deterministic local queue consumer
+
+At a turn boundary, after enqueueing, a local worker consumes at most one pending job and writes a compact `metadata-summary` (8 KB ceiling), retaining source call IDs and `taskVerified:false`. State becomes `summarized-metadata`, not a verified case. The work is synchronous and short, under a SQLite transaction; an interrupted transaction rolls back. It is not an async LLM worker and has no network/token cost. `automaticSummary:false` disables consumption. Full suite 81/81; tests prove one-time consumption, reopening state, source preservation and no case promotion.
+
+Outstanding: content hydration with consent/filters, async model extraction with budgets, scoped summary retrieval, live Host tests, upstream license completion. No prompt injection or inference was enabled.

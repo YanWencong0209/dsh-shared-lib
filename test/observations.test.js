@@ -71,3 +71,22 @@ test('turn queue is idempotent, bounded and does not call an extractor',()=>{
   assert.equal(s.stats('/a').active,0)
  }finally{s.close();rmSync(root,{recursive:true,force:true})}
 })
+
+test('local summary consumes queued jobs once without generating a fix or prompt',()=>{
+ const root=mkdtempSync(join(tmpdir(),'auto-summary-'));let s=new CaseStore(root)
+ try {
+  s.observe(exec,{isError:true},'/a')
+  s.observe({...exec,callId:'r'},{isError:false},'/a')
+  s.enqueueEpisodes('/a','s')
+  const done=s.summarizeNext();assert.equal(done.state,'summarized-metadata')
+  assert.equal(s.summarizeNext().processed,false)
+  s.close();s=new CaseStore(root)
+  const row=s.db.prepare('SELECT * FROM memory_jobs WHERE id=?').get(done.id)
+  const summary=JSON.parse(row.summary)
+  assert.equal(summary.items[0].failureCall,'c')
+  assert.equal(summary.items[0].laterReturnedCall,'r')
+  assert.equal(summary.items[0].taskVerified,false)
+  assert.equal(summary.requiresEvidence,true)
+  assert.equal(s.stats('/a').active,0)
+ }finally{s.close();rmSync(root,{recursive:true,force:true})}
+})
