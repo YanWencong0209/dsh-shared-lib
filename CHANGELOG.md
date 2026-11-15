@@ -7,6 +7,8 @@
 - 可选 Host LLM worker：只有同时配置 `automaticProvider` 与 `automaticModel` 才运行；工具白名单、证据来源 ID、摘要/输入/响应预算和租约校验均强制执行。
 - `shared_cases.candidate_search`/`candidate_read` 提供按工作区限额搜索和按 ID 读取；摘要最多 3 条×180 字符，永远标 `candidate`/`taskVerified:false`，不自动晋升为 verified case。
 - 离线重复任务 fixture 全文 7,121 字符、短摘要 844 字符（88.1% 降幅）；只比较字符量，不代表 tokenizer token、费用或答案质量。
+- Observation 使用 SQLite 原子滚动窗口保留最新 10,000 条，满时淘汰最旧临时记录，不会永久停止采集。
+- 提取证据清理常见凭据和控制字符，以 untrusted fence 传给模型；这是风险缓解，不保证抵御所有 prompt injection。
 - 提取失败按 1s/2s 退避（封顶 60s），最多尝试 3 次；只持久化稳定失败码，不保存 provider 原始错误。
 - 全部能力仍在 `feature/automatic-memory`，未安装到 profile，未合并 main；94/94 测试通过。
 - 参考源码与验收清单见 `MEMORY-RESEARCH.md`。
