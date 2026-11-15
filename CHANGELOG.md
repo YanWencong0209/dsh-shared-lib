@@ -14,6 +14,9 @@
 - Host 生命周期修复：turn-stopping 返回 undefined，不截断后续监听器；第三次提取租约崩溃过期后标 failed。
 - 提取前按工具白名单筛选来源，混合工具不会整批失败；空集合跳过且不调用模型。
 - 全部能力仍在 `feature/automatic-memory`，未安装到 profile，未合并 main；最新测试证据见研究记录。
+- 后台 scheduler 独立启动扫描/到期重试；回合事件只唤醒，不等待模型；卸载取消并等待收尾。离线会话不阻塞在线队列。
+- 真实 Cordis/Session 隔离生命周期通过，110项测试零跳过；当前运行profile未更新。
+- 已做3次限额真实模型请求：全文成功（1,351输入tokens）、摘要超时、提取连接失败。对照不成立，无账单价格数据。详情见 `evidence/live-model-fixture.json`。
 - 参考源码与验收清单见 `MEMORY-RESEARCH.md`。
 
 

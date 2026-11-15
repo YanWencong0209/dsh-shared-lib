@@ -165,3 +165,12 @@ User authorized autonomous progress, including bounded model validation. Ran exa
 - Answer rubric was ambiguous (binEnv/storeFlag could mean variable/flag names or their values). The successful full reply returned correct concrete fixture paths; its strict boolean rubric is **not** evidence of poor model quality.
 
 Comparison is inconclusive: no paired token savings, latency advantage, quality parity or real price claim is supported. Provider price/billing receipt unavailable. Results stored in evidence/live-model-fixture.json. No more automatic retries were performed. Previous "needs user approval" notes above are historical: permission has been granted; live route reliability is the observed limitation.
+
+
+## Current remaining work
+
+- Implemented and pushed: independent scheduler and live-session recovery gating (67a91b4), actual isolated Cordis lifecycle (07d1d56), bounded live HTTP measurements (e654c23).
+- No further user approval is pending for these scoped validations; latest authorization was "按照你的思路做，不需要问我".
+- Live paired comparison is inconclusive due to route timeout/transport errors and rubric ambiguity. No savings/quality/cost claims are supported by those three calls.
+- Current profile has not been changed. Main remains separate. Current implementation does not remove existing meow-memory reflection prompts.
+- Recovery waits for the relevant session to become live; it deliberately does not scan arbitrary persisted logs. All jobs remain bounded by capacity/terminal retention policies.
