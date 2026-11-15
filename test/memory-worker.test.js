@@ -56,3 +56,24 @@ test('crash on final lease becomes terminal after expiry',()=>{
   assert.equal(row.state,'failed');assert.equal(row.failure,'LEASE_EXPIRED')
  }finally{store.close();rmSync(root,{recursive:true,force:true})}
 })
+
+
+test('mixed tools filter unauthorized evidence before hydration',async()=>{
+ const root=mkdtempSync(join(tmpdir(),'worker-tools-'));const store=new CaseStore(root)
+ try{
+  for(const [name,callId] of [['bash','b'],['read','r']])store.observe({name,agent:{id:'s'},callId},{isError:true},'/p')
+  store.enqueueEpisodes('/p','s');store.summarizeNext('/p','s')
+  const ids=[]
+  const result=await runMemoryJob({store,workspace:'/p',session:'s',allowedTools:['bash'],read:async({id})=>{ids.push(id);return 'diagnostic'},extract:async()=>({summary:'bash diagnostic',sourceIds:['b']})})
+  assert.equal(result.state,'candidate');assert.deepEqual(ids,['b'])
+ }finally{store.close();rmSync(root,{recursive:true,force:true})}
+})
+test('empty evidence allowlist skips job without inference or retry',async()=>{
+ const root=mkdtempSync(join(tmpdir(),'worker-none-'));const store=new CaseStore(root)
+ try{
+  queued(store)
+  const result=await runMemoryJob({store,workspace:'/p',session:'s',allowedTools:[],read:()=>{throw Error('must not read')},extract:()=>{throw Error('must not infer')}})
+  assert.equal(result.state,'skipped-no-allowed-evidence')
+  assert.equal(store.db.prepare('SELECT state FROM memory_jobs').get().state,'skipped')
+ }finally{store.close();rmSync(root,{recursive:true,force:true})}
+})

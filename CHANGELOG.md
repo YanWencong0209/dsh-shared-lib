@@ -11,7 +11,9 @@
 - 损坏/不符合 schema 的候选 JSON 在搜索时跳过、按 ID 读取返回 null，不泄漏存储异常或原始内容。
 - 提取证据清理常见凭据和控制字符，以 untrusted fence 传给模型；这是风险缓解，不保证抵御所有 prompt injection。
 - 提取失败按 1s/2s 退避（封顶 60s），最多尝试 3 次；只持久化稳定失败码，不保存 provider 原始错误。
-- 全部能力仍在 `feature/automatic-memory`，未安装到 profile，未合并 main；94/94 测试通过。
+- Host 生命周期修复：turn-stopping 返回 undefined，不截断后续监听器；第三次提取租约崩溃过期后标 failed。
+- 提取前按工具白名单筛选来源，混合工具不会整批失败；空集合跳过且不调用模型。
+- 全部能力仍在 `feature/automatic-memory`，未安装到 profile，未合并 main；最新测试证据见研究记录。
 - 参考源码与验收清单见 `MEMORY-RESEARCH.md`。
 
 
