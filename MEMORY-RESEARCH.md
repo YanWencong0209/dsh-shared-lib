@@ -44,7 +44,7 @@ Read license headers: Graphiti and extracted Claude-mem LICENSE are Apache-2.0. 
 | E | Explicit, bounded Host LLM stream adapter with citations | Done as adapter; provider/model must be explicitly configured |
 | F | Lease/retry queue, persist candidates, return short scoped summaries | Done locally; 1s/2s backoff (60s cap), max three attempts, fixed failure code, workspace-scoped candidate_search/read |
 | G | Connect Host lifecycle; teardown awaits worker | Done in development branch; simulated Host test, not live verification |
-| H | Context budget measurement on repeated-task fixtures | Offline proxy done: 10 candidates, full JSON 7,121 chars vs bounded search 844 chars (88.1% lower), with ID drill-down. Real tokenizer tokens, provider cost, latency and answer-quality comparison remain pending; no live model run |
+| H | Context budget/retrieval measurement | Offline 10-candidate fixture: 7,121→844 chars (88.1% reduction). Synthetic 8-query ranking: Recall@3=1.0, MRR=0.875; two similar error cases rank second. Real tokenizer tokens, provider cost/latency and generated-answer quality remain pending; no live model run |
 | I | Verify reference licenses and record checkout completeness | Licenses read from all five pinned HEADs: Mem0 Apache-2.0, Basic Memory AGPL-3.0, Graphiti/Letta Code/Claude-mem Apache-2.0. Basic Memory/Graphiti working trees complete; selected files and LICENSE blobs for Mem0/Letta/Claude-mem extracted via git show. Their working trees remain partial; no code copied |
 | J | Final package metadata, README/CHANGELOG, security review, 0.8.0 candidate | Docs/package list synchronized on this branch; production-ready gate remains pending Host runtime validation and cost/quality study |
 
@@ -143,7 +143,8 @@ No real model request was sent. Provider cost depends on the explicitly selected
 
 - Failure retry backoff: 1s, 2s, capped at 60s; third failure becomes terminal. Persist only `EXTRACTION_FAILED`, not provider error text.
 - Added concurrent turn-stop test: shared queue lease permits one model call; plugin teardown waits before closing SQLite.
-- Latest `node --test --test-concurrency=1 test/*.test.js`: **98/98 passed** after untrusted evidence fencing and the 10k rolling retention test. Parallel test runner previously stalled in cases CLI subprocess; serial full run passes.
+- Latest `node --test --test-concurrency=1 test/*.test.js`: **99/99 passed** after evidence fencing, rolling retention and retrieval benchmark. Parallel test runner previously stalled in cases CLI subprocess; serial full run passes.
 - Version synchronization: package.json and seeded `assets/shared.sh` both `0.8.0`.
 - Candidate retrieval exposed through `shared_cases.candidate_search`/`candidate_read`; local-only offline fixture: 7,121 full JSON chars vs 844 compact chars (88.1% lower), 10 candidates and source-ID drill-down. This is not tokenizer token or model-quality evidence.
-- Remaining: no live provider usage/cost/quality measurement and no live installed-Host lifecycle run. Do not claim production readiness or that independently installed meow-memory reflection is replaced.
+- Synthetic retrieval fixture (8 queries): Recall@3=1.0, MRR=0.875; two similar package/runtime failures rank second. This measures retrieval only, not generated-answer quality.
+- Remaining: no live provider usage/token cost/latency or answer-quality measurement and no live installed-Host lifecycle run. Do not claim production readiness or that independently installed meow-memory reflection is replaced.
