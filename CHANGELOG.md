@@ -8,6 +8,7 @@
 - `shared_cases.candidate_search`/`candidate_read` 提供按工作区限额搜索和按 ID 读取；摘要最多 3 条×180 字符，永远标 `candidate`/`taskVerified:false`，不自动晋升为 verified case。
 - 离线重复任务 fixture 全文 7,121 字符、短摘要 844 字符（88.1% 降幅）；8-query 合成检索 Recall@3=1.0 / MRR=0.875。只测字符与检索排序，不代表 tokenizer token、费用或生成质量。
 - Observation 使用 SQLite 原子滚动窗口保留最新 10,000 条，满时淘汰最旧临时记录，不会永久停止采集。
+- 损坏/不符合 schema 的候选 JSON 在搜索时跳过、按 ID 读取返回 null，不泄漏存储异常或原始内容。
 - 提取证据清理常见凭据和控制字符，以 untrusted fence 传给模型；这是风险缓解，不保证抵御所有 prompt injection。
 - 提取失败按 1s/2s 退避（封顶 60s），最多尝试 3 次；只持久化稳定失败码，不保存 provider 原始错误。
 - 全部能力仍在 `feature/automatic-memory`，未安装到 profile，未合并 main；94/94 测试通过。
