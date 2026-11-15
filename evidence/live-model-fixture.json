@@ -1,0 +1,58 @@
+{
+  "provider": "jd",
+  "model": "deepseek-v4.1-flash-1017",
+  "requests": 3,
+  "outputCap": 256,
+  "timeoutMs": 30000,
+  "retries": 0,
+  "transport": "direct configured OpenAI-compatible HTTP, not Host llm stream",
+  "synthetic": true,
+  "billingCost": null,
+  "billingNote": "No authoritative tariff/billing receipt available; provider usage is not a price quote.",
+  "results": [
+    {
+      "kind": "full",
+      "model": "deepseek-v4.1-flash-1017",
+      "provider": "jd",
+      "inputChars": 8503,
+      "httpStatus": 200,
+      "finishReason": "stop",
+      "usage": {
+        "prompt_tokens": 1351,
+        "completion_tokens": 162,
+        "total_tokens": 1513,
+        "completion_tokens_details": {
+          "reasoning_tokens": 132
+        },
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "output": "{\"caseId\":\"case-1\",\"binEnv\":\"/tmp/synthetic/bin\",\"storeFlag\":\"/tmp/synthetic/env/pnpm/store\"}",
+      "quality": {
+        "caseId": true,
+        "binEnv": false,
+        "storeFlag": false,
+        "rubricAmbiguous": true
+      },
+      "latencyMs": 3692
+    },
+    {
+      "kind": "compact",
+      "model": "deepseek-v4.1-flash-1017",
+      "provider": "jd",
+      "inputChars": 448,
+      "error": "TIMEOUT",
+      "latencyMs": 30016
+    },
+    {
+      "kind": "extract",
+      "model": "deepseek-v4.1-flash-1017",
+      "provider": "jd",
+      "inputChars": 456,
+      "error": "REQUEST_FAILED",
+      "latencyMs": 666
+    }
+  ],
+  "interpretation": "Inconclusive comparison: compact timed out; extraction transport failed. The answer schema used ambiguous binEnv/storeFlag fields: returning concrete values is reasonable, so boolean rubric failures are not quality failures."
+}

@@ -153,3 +153,15 @@ No real model request was sent. Provider cost depends on the explicitly selected
 - Independent lifecycle-owned scheduler added: startup scan, 1s polling, coalesced wake replay, non-overlapping drains and abort/await disposal. Turn-stopping now only enqueues/wakes and returns undefined immediately. Available live sessions are filtered before selecting pending work; absent sessions remain pending until restored, without starving live sessions. Evidence is not loaded from arbitrary disk history. Timer-only retry, cancellation and scope-starvation regressions pass. Full installed-Session suite: 109/109, zero skipped.
 - Installed Cordis isolation test now mounts the real SystemPrompt and ToolsService plus this plugin in a separate Context, emits tools/result, serially dispatches turn-stopping, checks persistence and verifies no events are captured after fiber disposal. Full suite with real Cordis and Session: 110/110, zero skipped. This is a real isolated SDK lifecycle run, not current profile activation or real network inference.
 - Remaining: no live provider usage/token cost/latency or answer-quality measurement. Do not claim production readiness or that independently installed meow-memory reflection is replaced.
+
+
+## Authorized live-provider fixture (jd)
+
+User authorized autonomous progress, including bounded model validation. Ran exactly three synthetic requests on the configured jd/deepseek-v4.1-flash-1017 route, 256 output-token cap, 30s timeout each, zero retries. No conversation or real memory content sent; credentials stayed in the process. Transport was direct configured OpenAI-compatible HTTP, **not Host llm.stream**.
+
+- Full-context request: HTTP 200/stop, 8,503 input characters, provider-reported prompt_tokens=1,351; completion_tokens=162 including reasoning_tokens=132; latency 3,692ms.
+- Compact-context request: 448 input characters; timed out after 30,016ms; usage unavailable.
+- Extraction fixture: 456 input characters; request failed after 666ms; usage unavailable.
+- Answer rubric was ambiguous (binEnv/storeFlag could mean variable/flag names or their values). The successful full reply returned correct concrete fixture paths; its strict boolean rubric is **not** evidence of poor model quality.
+
+Comparison is inconclusive: no paired token savings, latency advantage, quality parity or real price claim is supported. Provider price/billing receipt unavailable. Results stored in evidence/live-model-fixture.json. No more automatic retries were performed. Previous "needs user approval" notes above are historical: permission has been granted; live route reliability is the observed limitation.
