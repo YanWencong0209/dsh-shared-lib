@@ -147,4 +147,6 @@ No real model request was sent. Provider cost depends on the explicitly selected
 - Version synchronization: package.json and seeded `assets/shared.sh` both `0.8.0`.
 - Candidate retrieval exposed through `shared_cases.candidate_search`/`candidate_read`; local-only offline fixture: 7,121 full JSON chars vs 844 compact chars (88.1% lower), 10 candidates and source-ID drill-down. This is not tokenizer token or model-quality evidence.
 - Synthetic retrieval fixture (8 queries): Recall@3=1.0, MRR=0.875; two similar package/runtime failures rank second. This measures retrieval only, not generated-answer quality.
+- Independent source audit found and fixed two lifecycle bugs: the turn-stopping listener must resolve undefined so Cordis serial dispatch continues; an expired third-attempt lease now becomes failed/LEASE_EXPIRED. Full suite with installed Session contract: 102/102, zero skipped.
+- Further source-audit findings still open: allowlist filtering before batch hydration; terminal-job retention/capacity; independent retry scheduling/startup recovery.
 - Remaining: no live provider usage/token cost/latency or answer-quality measurement and no live installed-Host lifecycle run. Do not claim production readiness or that independently installed meow-memory reflection is replaced.

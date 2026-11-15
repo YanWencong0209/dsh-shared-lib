@@ -41,3 +41,18 @@ test('three failures stop retries and stale leases cannot publish',async()=>{
   assert.equal(store.claimExtraction('/p','s',Date.now()+120000),null)
  }finally{store.close();rmSync(root,{recursive:true,force:true})}
 })
+
+
+test('crash on final lease becomes terminal after expiry',()=>{
+ const root=mkdtempSync(join(tmpdir(),'worker-final-crash-'));const store=new CaseStore(root)
+ try{
+  queued(store)
+  store.claimExtraction('/p','s',0)
+  store.claimExtraction('/p','s',40000)
+  const final=store.claimExtraction('/p','s',80000)
+  assert.equal(final.attempts,3)
+  assert.equal(store.claimExtraction('/p','s',120000),null)
+  const row=store.db.prepare('SELECT state,failure FROM memory_jobs').get()
+  assert.equal(row.state,'failed');assert.equal(row.failure,'LEASE_EXPIRED')
+ }finally{store.close();rmSync(root,{recursive:true,force:true})}
+})

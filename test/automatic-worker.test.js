@@ -38,7 +38,7 @@ test('explicit route extracts one scoped queued candidate and disposal waits', a
   listeners.get('tools/result')({agent,callId:'call-1',name:'bash'}, {isError:true,error:{info:{code:'ENOENT'}}})
   const listener=listeners.get('agent/turn-stopping')
   const event={agent,turn:1,signal:new AbortController().signal}
-  await listener(event)
+  assert.equal(await listener(event),undefined,'must not bail Cordis serial listeners')
   assert.equal(started,1,'exactly one queued extraction ran')
   const storePath=root+'/state/cases/cases.sqlite'
   const {DatabaseSync}=await import('node:sqlite');const db=new DatabaseSync(storePath,{readOnly:true})
