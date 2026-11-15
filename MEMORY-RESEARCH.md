@@ -186,3 +186,10 @@ A corrected synthetic benchmark used the same explicit JSON answer schema for fu
 - No provider tariff or billing receipt was available, so no currency cost claim is made. Raw bounded result is `evidence/live-model-paired.json`.
 
 This is a small synthetic correctness/usage sample, not a production quality benchmark. The previous inconclusive three-request artifact remains in `evidence/live-model-fixture.json` for audit history.
+
+
+## Current profile deployment verification
+
+Installed the validated source at /root/dsh-shared-lib-audit/dsh-shared-lib-auto using plugin_manager after removing the prior 0.7.5 bundle. Installation returned application=applied, version=0.8.0, warnings=[]. No process restart was performed. shared_lib(status) reports CLI 0.8.0 / runtime 0.8.0; shared_cases(candidate_search) executes successfully and returns an empty bounded result. Read-only SQLite inspection observed 9 automatically captured metadata rows and no queued jobs during this turn. Existing five active cases remain visible.
+
+Important: installed defaults do not configure automaticProvider/automaticModel, so model extraction is NOT enabled. Metadata capture and candidate tool registration are live; this is not evidence of an automatically generated candidate. meow-memory remains independently enabled and its reflection prompts are unchanged.
