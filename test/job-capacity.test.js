@@ -18,3 +18,14 @@ test('terminal history is bounded and cannot permanently block new jobs',()=>{
   assert.equal(s.db.prepare("SELECT COUNT(*) n FROM memory_jobs WHERE state='awaiting-extractor'").get().n,1)
  }finally{s.close();rmSync(root,{recursive:true,force:true})}
 })
+
+test('offline oldest session cannot starve live pending scope',()=>{
+ const root=mkdtempSync(join(tmpdir(),'job-live-scope-')),s=new CaseStore(root)
+ try{
+  const insert=s.db.prepare('INSERT INTO memory_jobs(id,workspace,session,cursor,payload,state,created) VALUES(?,?,?,?,?,?,?)')
+  insert.run('old','/p','offline',1,'{}','summarized-metadata','2000-01-01')
+  insert.run('new','/p','live',2,'{}','summarized-metadata','2001-01-01')
+  assert.equal(s.nextExtractionScope(Date.now(),new Set(['live'])).session,'live')
+  assert.equal(s.nextExtractionScope(Date.now(),new Set()),null)
+ }finally{s.close();rmSync(root,{recursive:true,force:true})}
+})

@@ -38,7 +38,8 @@ test('explicit route extracts one scoped queued candidate and disposal waits', a
   listeners.get('tools/result')({agent,callId:'call-1',name:'bash'}, {isError:true,error:{info:{code:'ENOENT'}}})
   const listener=listeners.get('agent/turn-stopping')
   const event={agent,turn:1,signal:new AbortController().signal}
-  assert.equal(await listener(event),undefined,'must not bail Cordis serial listeners')
+  assert.equal(listener(event),undefined,'must not block or bail Cordis serial listeners')
+  await new Promise(resolve=>setTimeout(resolve,60))
   assert.equal(started,1,'exactly one queued extraction ran')
   const storePath=root+'/state/cases/cases.sqlite'
   const {DatabaseSync}=await import('node:sqlite');const db=new DatabaseSync(storePath,{readOnly:true})
@@ -61,6 +62,8 @@ test('concurrent turn stops serialize extraction per plugin instance', async () 
    const agent={id:'s',session:{id:'s',header:{cwd:'/tmp/p'}}}
    listeners.get('tools/result')({agent,callId:'c',name:'bash'},{isError:true,error:{info:{code:'ENOENT'}}})
    const fn=listeners.get('agent/turn-stopping');await Promise.all([fn({agent,turn:1}),fn({agent,turn:2})])
+   // Turn stopping is deliberately nonblocking; wait for background consumption.
+   await new Promise(resolve=>setTimeout(resolve,60))
    assert.equal(calls,1,'duplicate concurrent turn must not start a second extract after lease completion')
   }finally{await disposeHook?.()();rmSync(root,{recursive:true,force:true})}
 })
