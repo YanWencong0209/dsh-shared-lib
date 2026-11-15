@@ -143,7 +143,7 @@ No real model request was sent. Provider cost depends on the explicitly selected
 
 - Failure retry backoff: 1s, 2s, capped at 60s; third failure becomes terminal. Persist only `EXTRACTION_FAILED`, not provider error text.
 - Added concurrent turn-stop test: shared queue lease permits one model call; plugin teardown waits before closing SQLite.
-- `node --test --test-concurrency=1 test/*.test.js`: **97/97 passed**. A parallel test-runner process previously stalled in cases CLI subprocess; isolated and full serial runs pass.
+- Latest `node --test --test-concurrency=1 test/*.test.js`: **98/98 passed** after untrusted evidence fencing and the 10k rolling retention test. Parallel test runner previously stalled in cases CLI subprocess; serial full run passes.
 - Version synchronization: package.json and seeded `assets/shared.sh` both `0.8.0`.
 - Candidate retrieval exposed through `shared_cases.candidate_search`/`candidate_read`; local-only offline fixture: 7,121 full JSON chars vs 844 compact chars (88.1% lower), 10 candidates and source-ID drill-down. This is not tokenizer token or model-quality evidence.
 - Remaining: no live provider usage/cost/quality measurement and no live installed-Host lifecycle run. Do not claim production readiness or that independently installed meow-memory reflection is replaced.
