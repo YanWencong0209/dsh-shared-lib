@@ -187,8 +187,8 @@ test('shared_cases forwards every action its schema advertises', async () => {
     const exec = { agent: { id: 's1' } }
     for (const action of tool.parameters.properties.action.enum) {
       const args = { action }
-      if (action === 'search') args.query = 'nothing'
-      if (action === 'read' || action === 'archive') args.id = 'missing'
+      if (action === 'search' || action === 'candidate_search') args.query = 'nothing'
+      if (action === 'read' || action === 'archive' || action === 'candidate_read') args.id = 'missing'
       if (action === 'prune') args.retentionDays = 30
       if (action === 'save') Object.assign(args, { title: 't', problem: 'p', environment: 'e', attempts: 'a', solution: 's', evidence: 'ev' })
       await assert.doesNotReject(async () => tool.execute(args, exec), `${action} must be forwarded`)

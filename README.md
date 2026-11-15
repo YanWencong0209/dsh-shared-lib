@@ -160,4 +160,4 @@ node --test test/*.test.js   # commands/interceptor=拦截规则，hardening/dia
 
 ### 自动排障记忆（开发分支 feature/automatic-memory）
 
-`tools/result` 元数据 → 回合末候选轨迹/SQLite 队列 → 可选 Host stream 提取 → 有来源的候选摘要。提取默认关闭，需同时配置 `automaticProvider` + `automaticModel` 并提供工具白名单；不会自动发起模型请求，也不会把候选标成已验证修复。详见 `MEMORY-RESEARCH.md`。候选摘要检索目前是内部 store API，尚无模型工具入口或自动注入。当前分支尚未安装到 profile，未做真实 provider token 成本/质量评估，不能视为生产就绪，也不会替代独立 meow-memory 的反思流程。
+`tools/result` 元数据 → 回合末候选轨迹/SQLite 队列 → 可选 Host stream 提取 → 有来源的候选摘要。提取默认关闭，需同时配置 `automaticProvider` + `automaticModel` 并提供工具白名单；不会自动发起模型请求，也不会把候选标成已验证修复。详见 `MEMORY-RESEARCH.md`。候选摘要检索可用 `shared_cases` 的 `candidate_search` 按当前工作区检索、`candidate_read` 按 ID 查看；结果仍是 unverified candidate，不自动注入。当前分支尚未安装到 profile，未做真实 provider token 成本/质量评估，不能视为生产就绪，也不会替代独立 meow-memory 的反思流程。

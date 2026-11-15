@@ -42,13 +42,13 @@ Read license headers: Graphiti and extracted Claude-mem LICENSE are Apache-2.0. 
 | C | Derive source-linked failure episodes and enqueue per turn | Done; bounded, scoped, cursor-deduplicated |
 | D | Read only allowlisted recorded result text with workspace/session checks | Done as Host session adapter; live profile test still required |
 | E | Explicit, bounded Host LLM stream adapter with citations | Done as adapter; provider/model must be explicitly configured |
-| F | Lease/retry queue, persist candidates, return short scoped summaries | Done locally; worker is serialized at turn boundary |
+| F | Lease/retry queue, persist candidates, return short scoped summaries | Done locally; 1s/2s backoff (60s cap), max three attempts, fixed failure code, workspace-scoped candidate_search/read |
 | G | Connect Host lifecycle; teardown awaits worker | Done in development branch; simulated Host test, not live verification |
 | H | Token/cost/quality measurement on repeated-task fixtures | Pending; need a benchmark with and without retrieval and actual usage accounting; no live provider run |
 | I | Verify reference licenses and record checkout completeness | Licenses read from all five pinned HEADs: Mem0 Apache-2.0, Basic Memory AGPL-3.0, Graphiti/Letta Code/Claude-mem Apache-2.0. Basic Memory/Graphiti working trees complete; selected files and LICENSE blobs for Mem0/Letta/Claude-mem extracted via git show. Their working trees remain partial; no code copied |
-| J | Final package metadata, README/CHANGELOG, security review, 0.8.0 candidate | Pending |
+| J | Final package metadata, README/CHANGELOG, security review, 0.8.0 candidate | Docs/package list synchronized on this branch; production-ready gate remains pending Host runtime validation and cost/quality study |
 
-Hard gates: no generated candidate may be marked verified solely because a tool returned normally; real Host lifecycle tests and provider usage measurements must be clearly distinguished from local mocks. No runtime install or main merge without explicit user approval.
+Hard gates: no generated candidate may be marked verified solely because a tool returned normally; real Host lifecycle tests and provider usage measurements must be clearly distinguished from local mocks. Provider cost/quality benchmarking has not been run and needs a named provider/model plus explicit user approval for potentially billable calls. No runtime install/restart or main merge/tag without separate explicit user approval.
 
 ## Acceptance criteria
 
