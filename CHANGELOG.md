@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.8.0 — 自动排障记忆（实验性，未安装）
+## 0.8.0 — 自动排障记忆（实验性，本机已安装）
 
 - `tools/result` 自动记录受限元数据，按 workspace/session/call 去重；默认不读参数与原始输出。
 - 回合结束生成有来源的失败轨迹并持久化排队，带 16KB 载荷、1,000 任务、200 观察和 3 次提取尝试上限。
@@ -13,10 +13,11 @@
 - 提取失败按 1s/2s 退避（封顶 60s），最多尝试 3 次；只持久化稳定失败码，不保存 provider 原始错误。
 - Host 生命周期修复：turn-stopping 返回 undefined，不截断后续监听器；第三次提取租约崩溃过期后标 failed。
 - 提取前按工具白名单筛选来源，混合工具不会整批失败；空集合跳过且不调用模型。
-- 全部能力仍在 `feature/automatic-memory`，未安装到 profile，未合并 main；最新测试证据见研究记录。
+- 全部能力仍在 `feature/automatic-memory`，已安装本机 web profile，未合并 main；最新测试证据见研究记录。
 - 后台 scheduler 独立启动扫描/到期重试；回合事件只唤醒，不等待模型；卸载取消并等待收尾。离线会话不阻塞在线队列。
-- 真实 Cordis/Session 隔离生命周期通过，110项测试零跳过；当前运行profile未更新。
+- 真实 Cordis/Session 隔离生命周期通过，110项测试零跳过；当前运行 profile 已安装 0.8.0。
 - 修正答案 schema 后完成2次限额真实配对请求：full prompt 896 tokens、compact 149 tokens，输入降83.4%；两次HTTP 200且合成答案校验通过，延迟4.395s/2.547s。无账单价格数据，不宣称货币节省。详情见 `evidence/live-model-paired.json`；旧失败记录保留在 `evidence/live-model-fixture.json`。
+- 本机配置已持久化：自动采集/摘要开启，gtp/gpt-6.1-sol 提取，meow reflect/dream 关闭。隔离合成队列通过真实 Host stream 生成可检索候选；跨工作区零命中、verified case 零新增。临时配置/验证包已移除。
 - 参考源码与验收清单见 `MEMORY-RESEARCH.md`。
 
 

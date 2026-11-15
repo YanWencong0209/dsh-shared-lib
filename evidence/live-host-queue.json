@@ -1,0 +1,40 @@
+{
+  "synthetic": true,
+  "route": {
+    "provider": "gtp",
+    "model": "gpt-6.1-sol"
+  },
+  "transport": "running Host llm.stream",
+  "coverage": [
+    "CaseStore.observe",
+    "enqueueEpisodes",
+    "summarizeNext",
+    "memoryScheduler",
+    "runMemoryJob",
+    "hostExtractor",
+    "candidateSummaries"
+  ],
+  "observations": 2,
+  "state": "candidate",
+  "searchHits": 1,
+  "crossWorkspaceHits": 0,
+  "verifiedCases": 0,
+  "candidate": {
+    "status": "candidate",
+    "taskVerified": false,
+    "sourceIds": [
+      "failure",
+      "returned"
+    ]
+  },
+  "usage": {
+    "inputTokens": 278,
+    "outputTokens": 53,
+    "totalTokens": 4427,
+    "cacheReadTokens": 4096
+  },
+  "finish": {
+    "kind": "stop"
+  },
+  "limits": "Synthetic source reader and isolated SQLite; not a production-session automatic capture test. Provider usage is reported verbatim; no currency claim."
+}

@@ -1,6 +1,6 @@
 # dsh-shared-lib
 
-当前 main 已发布 v0.7.5；后续自动记忆实验在 `feature/automatic-memory`，未合并、未安装。目标矩阵见 [TARGETS.md](TARGETS.md)，排障案例库见 [CASE-MEMORY.md](CASE-MEMORY.md)，自动记忆源码研究与验收计划见 [MEMORY-RESEARCH.md](MEMORY-RESEARCH.md)。
+当前 main 已发布 v0.7.5；自动记忆实验在 `feature/automatic-memory`，未合并；本机 web profile 已安装 0.8.0。目标矩阵见 [TARGETS.md](TARGETS.md)，排障案例库见 [CASE-MEMORY.md](CASE-MEMORY.md)，自动记忆源码研究与验收计划见 [MEMORY-RESEARCH.md](MEMORY-RESEARCH.md)。
 
 跨工作区、跨会话共用的共享库：**工具 bin、开发环境、技能** 三样东西放一个目录里，
 外加一道前置 guard，拦住「`pip install` / `npm install -g` 装到系统、换个工作区就丢」这条最常见的坑。
@@ -13,7 +13,9 @@ v0.4.x 起共享库工具面补齐「声明式清单 + 完整性 + 跨机复现�
 
 ## 装
 
-当前 main 使用 `plugin_manager install_bundle` 安装。自动记忆改动仍在 `feature/automatic-memory`：未安装、未合并，不能作为当前插件能力使用。
+使用 `plugin_manager install_bundle` 安装本分支目录。本机 web profile 已安装 0.8.0，自动采集/摘要开启，提取路由为 `gtp/gpt-6.1-sol`，工具白名单为 bash/read/edit/write。meow-memory 的 reflect 与自动 dream 已关闭；手动记忆工具保留。安装源需核对为本分支目录；重启不会自行切换旧 link 的目标。自动记忆尚未合并 main。
+
+隔离合成观察已跑通队列、scheduler、真实 Host 模型提取和候选检索；生产会话长期运行质量及费用尚未测量。证据见 `evidence/live-host-queue.json`。
 
 装完自检：
 
@@ -25,7 +27,7 @@ shared doctor --json   # 机器可读诊断和退出状态
 shared list --json     # 工具、技能、Node/Python 清单
 shared memory status   # 记忆后端探测（meow-memory / mnemon）
 shared verify          # 清单完整性离线校验（missing/corrupt 非零退出）
-node --test test/*.test.js   # 74 项回归测试
+node --test --test-concurrency=1 test/*.test.js   # 110 项；真实 SDK 两项需设置下述环境变量
 ```
 
 ## 目录

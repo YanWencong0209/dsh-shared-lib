@@ -1,6 +1,6 @@
 # Automatic memory: pinned local source investigation
 
-Development baseline: 94c51c7 (v0.7.5). Branch: feature/automatic-memory. No runtime profile changes.
+Development baseline: 94c51c7 (v0.7.5). Branch: feature/automatic-memory. Historical sections record their own verification scope; current runtime status is at the end.
 
 ## Reference checkouts
 
@@ -193,3 +193,20 @@ This is a small synthetic correctness/usage sample, not a production quality ben
 Installed the validated source at /root/dsh-shared-lib-audit/dsh-shared-lib-auto using plugin_manager after removing the prior 0.7.5 bundle. Installation returned application=applied, version=0.8.0, warnings=[]. No process restart was performed. shared_lib(status) reports CLI 0.8.0 / runtime 0.8.0; shared_cases(candidate_search) executes successfully and returns an empty bounded result. Read-only SQLite inspection observed 9 automatically captured metadata rows and no queued jobs during this turn. Existing five active cases remain visible.
 
 Important: installed defaults do not configure automaticProvider/automaticModel, so model extraction is NOT enabled. Metadata capture and candidate tool registration are live; this is not evidence of an automatically generated candidate. meow-memory remains independently enabled and its reflection prompts are unchanged.
+
+
+## Runtime closure and updated checklist (2026-11-15)
+
+This section supersedes earlier pending/deployment snapshots.
+
+- [x] Restore installed source to `/root/dsh-shared-lib-audit/dsh-shared-lib-auto`; plugin_manager returned 0.8.0/application=applied. Runtime stamp independently reads 0.8.0.
+- [x] Read back persisted profile settings: automaticCapture/automaticSummary=true, gtp/gpt-6.1-sol, bash/read/edit/write allowlist; meow reflect=false and dream.enabled=false.
+- [x] Isolated synthetic two-observation pipeline: observe → episodes → metadata summary → scheduler → leased worker → real Host llm.stream → candidate persistence/search. Evidence: `evidence/live-host-queue.json`; source: `ops/runtime-setup/smoke-v6.js`. Synthetic reader supplied source text; this does not test production-session capture end to end. Candidate status remains unverified, cross-workspace hits=0, verified cases=0.
+- [x] Regression: 108 ordinary tests pass; installed Cordis and Session integration tests separately pass 2/2 after supplying both environment variables (110 unique passing tests in total).
+- [x] Remove temporary runtime setup bundle after validation, application=applied. Source fixtures remain locally for audit; no temporary plugin stays active.
+- [x] No main merge, tag, or process restart.
+- [ ] Long-running production quality, authoritative billing cost, macOS/Windows real machines remain outside this validation.
+
+Config inspection status `absent` means no exported Config schema, not proof of failed activation. An earlier interpretation to the contrary was incorrect. The initial `npm test` invocation failed because package.json has no test script; actual tests use Node's test runner.
+
+Reproduce installed SDK tests with `DSH_HOST_TEST_PACKAGES=/usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai` and `DSH_SESSION_TEST_MODULE=/usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-session/lib/index.js`, then `node --test --test-concurrency=1 test/*.test.js`.
