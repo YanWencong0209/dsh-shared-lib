@@ -143,7 +143,7 @@ No real model request was sent. Provider cost depends on the explicitly selected
 
 - Failure retry backoff: 1s, 2s, capped at 60s; third failure becomes terminal. Persist only `EXTRACTION_FAILED`, not provider error text.
 - Added concurrent turn-stop test: shared queue lease permits one model call; plugin teardown waits before closing SQLite.
-- Latest `node --test --test-concurrency=1 test/*.test.js`: **100/100 passed** after evidence fencing, rolling retention and malformed-candidate fail-closed tests. Parallel test runner previously stalled in cases CLI subprocess; serial full run passes.
+- Latest full run with `DSH_SESSION_TEST_MODULE` pointing to the installed Host session package: **101/101 passed, zero skipped**. The extra test constructs a real detached Session, appends validated tool/call and tool/result events and checks reader scope. It does not modify the running profile or prove the complete live Cordis lifecycle. Parallel test runner previously stalled in cases CLI subprocess; serial full run passes.
 - Version synchronization: package.json and seeded `assets/shared.sh` both `0.8.0`.
 - Candidate retrieval exposed through `shared_cases.candidate_search`/`candidate_read`; local-only offline fixture: 7,121 full JSON chars vs 844 compact chars (88.1% lower), 10 candidates and source-ID drill-down. This is not tokenizer token or model-quality evidence.
 - Synthetic retrieval fixture (8 queries): Recall@3=1.0, MRR=0.875; two similar package/runtime failures rank second. This measures retrieval only, not generated-answer quality.
