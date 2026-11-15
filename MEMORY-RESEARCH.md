@@ -44,7 +44,7 @@ Read license headers: Graphiti and extracted Claude-mem LICENSE are Apache-2.0. 
 | E | Explicit, bounded Host LLM stream adapter with citations | Done as adapter; provider/model must be explicitly configured |
 | F | Lease/retry queue, persist candidates, return short scoped summaries | Done locally; 1s/2s backoff (60s cap), max three attempts, fixed failure code, workspace-scoped candidate_search/read |
 | G | Connect Host lifecycle; teardown awaits worker | Done in development branch; simulated Host test, not live verification |
-| H | Token/cost/quality measurement on repeated-task fixtures | Pending; need a benchmark with and without retrieval and actual usage accounting; no live provider run |
+| H | Context budget measurement on repeated-task fixtures | Offline proxy done: 10 candidates, full JSON 7,121 chars vs bounded search 844 chars (88.1% lower), with ID drill-down. Real tokenizer tokens, provider cost, latency and answer-quality comparison remain pending; no live model run |
 | I | Verify reference licenses and record checkout completeness | Licenses read from all five pinned HEADs: Mem0 Apache-2.0, Basic Memory AGPL-3.0, Graphiti/Letta Code/Claude-mem Apache-2.0. Basic Memory/Graphiti working trees complete; selected files and LICENSE blobs for Mem0/Letta/Claude-mem extracted via git show. Their working trees remain partial; no code copied |
 | J | Final package metadata, README/CHANGELOG, security review, 0.8.0 candidate | Docs/package list synchronized on this branch; production-ready gate remains pending Host runtime validation and cost/quality study |
 
@@ -143,6 +143,7 @@ No real model request was sent. Provider cost depends on the explicitly selected
 
 - Failure retry backoff: 1s, 2s, capped at 60s; third failure becomes terminal. Persist only `EXTRACTION_FAILED`, not provider error text.
 - Added concurrent turn-stop test: shared queue lease permits one model call; plugin teardown waits before closing SQLite.
-- `node --test --test-concurrency=1 test/*.test.js`: **95/95 passed**. A parallel test-runner process stalled in cases CLI subprocess; the isolated cases test passed and the complete serial run passed.
+- `node --test --test-concurrency=1 test/*.test.js`: **97/97 passed**. A parallel test-runner process previously stalled in cases CLI subprocess; isolated and full serial runs pass.
 - Version synchronization: package.json and seeded `assets/shared.sh` both `0.8.0`.
+- Candidate retrieval exposed through `shared_cases.candidate_search`/`candidate_read`; local-only offline fixture: 7,121 full JSON chars vs 844 compact chars (88.1% lower), 10 candidates and source-ID drill-down. This is not tokenizer token or model-quality evidence.
 - Remaining: no live provider usage/cost/quality measurement and no live installed-Host lifecycle run. Do not claim production readiness or that independently installed meow-memory reflection is replaced.
