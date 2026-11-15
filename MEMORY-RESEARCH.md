@@ -40,15 +40,15 @@ Read license headers: Graphiti and extracted Claude-mem LICENSE are Apache-2.0. 
 | A | Pin local references and record code-level findings | Done; see fixed SHAs and source ranges above |
 | B | Capture bounded tool outcome metadata, no prompt or raw output | Done; source events are idempotent |
 | C | Derive source-linked failure episodes and enqueue per turn | Done; bounded, scoped, cursor-deduplicated |
-| D | Read only allowlisted recorded result text with workspace/session checks | Done as Host session adapter; live profile test still required |
+| D | Read only allowlisted recorded result text with workspace/session checks | Done; tested against installed real Session; current running profile unchanged |
 | E | Explicit, bounded Host LLM stream adapter with citations | Done as adapter; provider/model must be explicitly configured |
 | F | Lease/retry queue, persist candidates, return short scoped summaries | Done locally; 1s/2s backoff (60s cap), max three attempts, fixed failure code, workspace-scoped candidate_search/read |
-| G | Connect Host lifecycle; teardown awaits worker | Done in development branch; simulated Host test, not live verification |
-| H | Context budget/retrieval measurement | Offline 10-candidate fixture: 7,121→844 chars (88.1% reduction). Synthetic 8-query ranking: Recall@3=1.0, MRR=0.875, ranks=[2,1,2,1,1,1,1,1]; two similar error cases rank second. Malformed candidate JSON is skipped on search and returns null on read. Real tokenizer tokens, provider cost/latency and generated-answer quality remain pending; no live model run |
+| G | Connect Host lifecycle; teardown awaits worker | Done; actual installed Cordis isolated Context validated event dispatch/persistence/disposal; independent scheduler tested |
+| H | Context budget/retrieval measurement | Offline 10-candidate fixture: 7,121→844 chars (88.1% reduction). Synthetic 8-query ranking: Recall@3=1.0, MRR=0.875, ranks=[2,1,2,1,1,1,1,1]; two similar error cases rank second. Malformed candidate JSON is skipped on search and returns null on read. Corrected live synthetic pair: provider prompt usage 896→149 tokens; exact-path answer check passed both, latency 4395→2547ms. Single pair only; monetary price and production quality remain unmeasured |
 | I | Verify reference licenses and record checkout completeness | Licenses read from all five pinned HEADs: Mem0 Apache-2.0, Basic Memory AGPL-3.0, Graphiti/Letta Code/Claude-mem Apache-2.0. Basic Memory/Graphiti working trees complete; selected files and LICENSE blobs for Mem0/Letta/Claude-mem extracted via git show. Their working trees remain partial; no code copied |
-| J | Final package metadata, README/CHANGELOG, security review, 0.8.0 candidate | Docs/package list synchronized on this branch; production-ready gate remains pending Host runtime validation and cost/quality study |
+| J | Final package metadata, README/CHANGELOG, security review, 0.8.0 candidate | Development candidate validated: 110/110 zero skipped with installed Host packages; pack 50 files including evidence. Current profile deployment/main merge not performed |
 
-Hard gates: no generated candidate may be marked verified solely because a tool returned normally; real Host lifecycle tests and provider usage measurements must be clearly distinguished from local mocks. Provider cost/quality benchmarking has not been run and needs a named provider/model plus explicit user approval for potentially billable calls. No runtime install/restart or main merge/tag without separate explicit user approval.
+Hard gates: no generated candidate may be marked verified solely because a tool returned normally; real Host lifecycle tests and provider usage measurements must be clearly distinguished from local mocks. User authorized autonomous bounded validation. Synthetic live paired usage/answer checks have run; no authoritative billing price exists. Current profile remains unchanged and main/tag are separate release operations, not performed in this work.
 
 ## Acceptance criteria
 
@@ -174,3 +174,15 @@ Comparison is inconclusive: no paired token savings, latency advantage, quality 
 - Live paired comparison is inconclusive due to route timeout/transport errors and rubric ambiguity. No savings/quality/cost claims are supported by those three calls.
 - Current profile has not been changed. Main remains separate. Current implementation does not remove existing meow-memory reflection prompts.
 - Recovery waits for the relevant session to become live; it deliberately does not scan arbitrary persisted logs. All jobs remain bounded by capacity/terminal retention policies.
+
+
+## Corrected paired live benchmark (jd route)
+
+A corrected synthetic benchmark used the same explicit JSON answer schema for full and compact contexts, avoiding the earlier path-vs-variable rubric ambiguity. Exactly two direct OpenAI-compatible requests were sent to configured `jd/deepseek-v4.1-flash-1017`, maxTokens=256, timeout=20s, retries=0; no conversation or real memory data was included.
+
+- Full: HTTP 200/stop, prompt_tokens=896, completion_tokens=81 (reasoning=51), total=977, latency=4,395ms, quality=true.
+- Compact: HTTP 200/stop, prompt_tokens=149, completion_tokens=148 (reasoning=118), total=297, latency=2,547ms, quality=true.
+- Prompt-token reduction: 83.4% (747 fewer input tokens); output tokens increased by 67 on this tiny fixture. Both outputs copied the expected case ID and exact paths.
+- No provider tariff or billing receipt was available, so no currency cost claim is made. Raw bounded result is `evidence/live-model-paired.json`.
+
+This is a small synthetic correctness/usage sample, not a production quality benchmark. The previous inconclusive three-request artifact remains in `evidence/live-model-fixture.json` for audit history.

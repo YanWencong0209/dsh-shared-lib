@@ -1,0 +1,57 @@
+{
+  "synthetic": true,
+  "provider": "jd",
+  "model": "deepseek-v4.1-flash-1017",
+  "requests": 2,
+  "maxTokens": 256,
+  "timeoutMs": 20000,
+  "retries": 0,
+  "billingCost": null,
+  "billingNote": "No authoritative provider tariff/receipt.",
+  "results": [
+    {
+      "kind": "full",
+      "provider": "jd",
+      "model": "deepseek-v4.1-flash-1017",
+      "inputChars": 4509,
+      "httpStatus": 200,
+      "usage": {
+        "prompt_tokens": 896,
+        "completion_tokens": 81,
+        "total_tokens": 977,
+        "completion_tokens_details": {
+          "reasoning_tokens": 51
+        },
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "finishReason": "stop",
+      "output": "{\"caseId\":\"case-1\",\"binPath\":\"/tmp/synthetic/bin\",\"storePath\":\"/tmp/synthetic/env/pnpm/store\"}",
+      "quality": true,
+      "latencyMs": 4395
+    },
+    {
+      "kind": "compact",
+      "provider": "jd",
+      "model": "deepseek-v4.1-flash-1017",
+      "inputChars": 423,
+      "httpStatus": 200,
+      "usage": {
+        "prompt_tokens": 149,
+        "completion_tokens": 148,
+        "total_tokens": 297,
+        "completion_tokens_details": {
+          "reasoning_tokens": 118
+        },
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "finishReason": "stop",
+      "output": "{\"caseId\":\"case-1\",\"binPath\":\"/tmp/synthetic/bin\",\"storePath\":\"/tmp/synthetic/env/pnpm/store\"}",
+      "quality": true,
+      "latencyMs": 2547
+    }
+  ]
+}

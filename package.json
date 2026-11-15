@@ -30,6 +30,7 @@
     "TARGETS.md",
     "CASE-MEMORY.md",
     "CHANGELOG.md",
-    "MEMORY-RESEARCH.md"
+    "MEMORY-RESEARCH.md",
+    "evidence/*.json"
   ]
 }
